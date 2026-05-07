@@ -1,0 +1,275 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  DOCTOR
+  INSTITUTION
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum DoctorType {
+  PERSONAL
+  INSTITUTIONAL
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum ContactLabel {
+  RECEPTION
+  EMERGENCY
+  AMBULANCE
+  MANAGER
+  DOCTOR
+  PHARMACY
+  LAB
+  ASSISTANT
+  OTHER
+}
+
+enum PrescriptionStatus {
+  DRAFT
+  FINALIZED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+model User {
+  id       String          @id @default(uuid())
+  name     String
+  email    String          @unique
+  password String
+  role     UserRole        @default(DOCTOR)
+  phone    ContactNumber[]
+  status   UserStatus      @default(ACTIVE)
+  address  String?
+  logo     String?
+  slogan   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  doctor        Doctor?
+  prescriptions Prescription[]
+  subscriptions Subscription[]
+
+  @@map("users")
+}
+
+model ContactNumber {
+  id        String       @id @default(uuid())
+  userId    String?
+  chamberId String?
+  label     ContactLabel
+  phone     String
+  isPrimary Boolean      @default(false)
+
+  user    User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chamber Chamber? @relation(fields: [chamberId], references: [id], onDelete: Cascade)
+
+  @@map("contact_numbers")
+}
+
+model Doctor {
+  id     String @id @default(uuid())
+  name   String
+  userId String @unique
+
+  qualification  String
+  specialization String
+  registrationNo String @unique
+  signature      String
+
+  type DoctorType @default(PERSONAL)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chambers      Chamber[]
+  patients      Patient[]
+  prescriptions Prescription[]
+
+  @@map("doctors")
+}
+
+model Chamber {
+  id       String @id @default(uuid())
+  doctorId String
+
+  chamberName    String
+  chamberEmail   String?
+  chamberAddress String
+  chamberPhone   ContactNumber[]
+  logo           String?
+  chamberSlogan  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  doctor        Doctor         @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  prescriptions Prescription[]
+
+  @@map("chambers")
+}
+
+model Medicine {
+  id           String  @id @default(uuid())
+  brandName    String
+  type         String
+  slug         String  @unique
+  dosageForm   String
+  generic      String
+  strength     String?
+  manufacturer String?
+
+  @@index([slug])
+  @@map("medicines")
+}
+
+model Patient {
+  id       String  @id @default(uuid())
+  doctorId String  @default("00000000-0000-0000-0000-000000000000")
+  name     String
+  age      Int
+  gender   Gender
+  weight   Float?
+  phone    String?
+  address  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  doctor        Doctor         @relation(fields: [doctorId], references: [id], onDelete: SetDefault)
+  prescriptions Prescription[]
+
+  @@map("patients")
+}
+
+model Prescription {
+  id        String  @id @default(uuid())
+  doctorId  String  @default("00000000-0000-0000-0000-000000000000")
+  patientId String  @default("00000000-0000-0000-0000-000000000000")
+  chamberId String?
+  userId    String?
+
+  complaints    String?
+  diagnosis     String?
+  bloodPressure String?
+  pulse         String?
+  temperature   String?
+
+  medicines     Json
+  dosagePattern String
+  duration      String
+  whenToTake    String
+
+  clinicalNotes String?
+  advises       String?
+
+  nextVisitDate DateTime?
+  pdf           String?
+
+  status PrescriptionStatus @default(DRAFT)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  doctor  Doctor   @relation(fields: [doctorId], references: [id], onDelete: SetDefault)
+  chamber Chamber? @relation(fields: [chamberId], references: [id], onDelete: SetNull)
+  patient Patient  @relation(fields: [patientId], references: [id], onDelete: SetDefault)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("prescriptions")
+}
+
+model SubscriptionVariant {
+  id                     String  @id @default(uuid())
+  variantName            String
+  description            Json
+  dailyPrescriptionLimit Int
+  price                  Float
+  isActive               Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@map("subscription_variants")
+}
+
+model Subscription {
+  id                    String        @id @default(uuid())
+  userId                String
+  subscriptionVariantId String        @default("00000000-0000-0000-0000-000000000000")
+  voucherCode           String?
+  startDate             DateTime
+  expiryDate            DateTime
+  price                 Float
+  discount              Float
+  paymentStatus         PaymentStatus @default(PENDING)
+  isActive              Boolean       @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptionVariant SubscriptionVariant @relation(fields: [subscriptionVariantId], references: [id], onDelete: SetDefault)
+  voucher             Voucher?            @relation(fields: [voucherCode], references: [code], onDelete: SetNull)
+  payments            Payment[]
+
+  @@map("subscriptions")
+}
+
+model Voucher {
+  id                 String   @id @default(uuid())
+  code               String   @unique
+  startDate          DateTime
+  expiryDate         DateTime
+  discountPercentage Float
+  isActive           Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@map("vouchers")
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  subscriptionId String
+  amount         Float
+  paymentDate    DateTime      @default(now())
+  paymentMethod  String
+  status         PaymentStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
