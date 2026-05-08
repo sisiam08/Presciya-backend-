@@ -16,11 +16,11 @@ const setCookies = async (res: Response, token: string) => {
 };
 
 const signUp = catchAsync(async (req: Request, res: Response) => {
-  const { name, email, password, phone } = req.body;
+  const data = await AuthServices.signUp(req.body);
 
-  const data = await AuthServices.signUp({ name, email, password, phone });
-
-  setCookies(res, data.token);
+  if (data.token) {
+    setCookies(res, data.token);
+  }
 
   sendResponse(res, {
     statusCode: Status.CREATED,
@@ -31,11 +31,11 @@ const signUp = catchAsync(async (req: Request, res: Response) => {
 });
 
 const logIn = catchAsync(async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const data = await AuthServices.logIn(req.body);
 
-  const data = await AuthServices.logIn({ email, password });
-
-  setCookies(res, data.token);
+  if (data.token) {
+    setCookies(res, data.token);
+  }
 
   sendResponse(res, {
     statusCode: Status.OK,

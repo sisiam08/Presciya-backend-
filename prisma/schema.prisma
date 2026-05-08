@@ -10,7 +10,8 @@ datasource db {
 enum UserRole {
   ADMIN
   MANAGER
-  DOCTOR
+  DOCTOR_PERSONAL
+  DOCTOR_INSTITUTIONAL
   INSTITUTION
 }
 
@@ -61,7 +62,7 @@ model User {
   name     String
   email    String          @unique
   password String
-  role     UserRole        @default(DOCTOR)
+  role     UserRole        @default(DOCTOR_PERSONAL)
   phone    ContactNumber[]
   status   UserStatus      @default(ACTIVE)
   address  String?
@@ -97,10 +98,10 @@ model Doctor {
   name   String
   userId String @unique
 
-  qualification  String
-  specialization String
-  registrationNo String @unique
-  signature      String
+  qualification  String?
+  specialization String?
+  registrationNo String? @unique
+  signature      String?
 
   type DoctorType @default(PERSONAL)
 

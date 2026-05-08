@@ -1,6 +1,6 @@
 import { ContactLabel } from "../../generated/prisma/enums";
 
-export interface ContactType {
+export interface IContactType {
   userId?: string;
   chamberId?: string;
   label: ContactLabel;

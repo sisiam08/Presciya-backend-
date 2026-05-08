@@ -4,7 +4,11 @@ import { ILogInUserType, ISignUpUserType } from "../../interface";
 import jwt from "jsonwebtoken";
 import { createAppError } from "../../errors/appError";
 import { Status } from "../../errors/httpStatus";
-import { ContactLabel } from "../../../generated/prisma/enums";
+import {
+  ContactLabel,
+  DoctorType,
+  UserRole,
+} from "../../../generated/prisma/enums";
 
 const jwtSecret: jwt.Secret =
   process.env.JWT_SECRET ??
@@ -13,7 +17,7 @@ const jwtExpiresIn: NonNullable<jwt.SignOptions["expiresIn"]> = (process.env
   .JWT_EXPIRES_IN ?? "4d") as NonNullable<jwt.SignOptions["expiresIn"]>;
 
 const signUp = async (userData: ISignUpUserType) => {
-  const { name, email, password, phone } = userData;
+  const { name, email, password, role, phone } = userData;
 
   const existingUser = await prisma.user.findUnique({
     where: {
@@ -30,35 +34,58 @@ const signUp = async (userData: ISignUpUserType) => {
 
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  const user = await prisma.user.create({
-    data: {
-      name,
-      email,
-      password: hashedPassword,
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-    },
+  const data = await prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        role: role ?? UserRole.DOCTOR_PERSONAL,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+      },
+    });
+
+    if (phone) {
+      await tx.contactNumber.create({
+        data: { userId: user.id, label: ContactLabel.DEFAULT, phone },
+      });
+    }
+
+    if (
+      user.role === UserRole.DOCTOR_INSTITUTIONAL ||
+      user.role === UserRole.DOCTOR_PERSONAL
+    ) {
+      const doctorType =
+        user.role === UserRole.DOCTOR_INSTITUTIONAL
+          ? DoctorType.INSTITUTIONAL
+          : DoctorType.PERSONAL;
+
+      await tx.doctor.create({
+        data: {
+          name: user.name,
+          userId: user.id,
+          type: doctorType,
+        },
+      });
+    }
+
+    return user;
   });
 
-  if (phone) {
-    await prisma.contactNumber.create({
-      data: { userId: user.id, label: ContactLabel.DEFAULT, phone },
-    });
-  }
-
   const token = jwt.sign(
-    { id: user.id, name: user.name, email: user.email, role: user.role },
+    { id: data.id, name: data.name, email: data.email, role: data.role },
     jwtSecret,
     {
       expiresIn: jwtExpiresIn,
     },
   );
 
-  return { data: user, token };
+  return { data, token };
 };
 
 const logIn = async (userData: ILogInUserType) => {
