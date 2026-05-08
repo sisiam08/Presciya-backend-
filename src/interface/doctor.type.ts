@@ -1,11 +1,18 @@
-import { DoctorType } from "../../generated/prisma/enums";
+import { DoctorType, UserRole } from "../../generated/prisma/enums";
 
-export interface IDoctorProfileData {
+export interface IUpdateDoctorProfile {
   name: string;
-  userId?: string;
-  qualification: string;
-  specialization: string;
+  qualification?: string;
+  specialization?: string;
   registrationNo: string;
   signature?: string;
-  type?: DoctorType;
+}
+
+export interface IAssignDoctor {
+  name: string;
+  email: string;
+  password: string;
+  institutionalId: string;
+  role: UserRole;
+  type: DoctorType;
 }

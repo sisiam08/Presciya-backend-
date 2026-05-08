@@ -45,7 +45,7 @@ const logIn = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-export const AuthController = {
+export const AuthControllers = {
   signUp,
   logIn,
 };

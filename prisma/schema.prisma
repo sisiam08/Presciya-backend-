@@ -94,9 +94,10 @@ model ContactNumber {
 }
 
 model Doctor {
-  id     String @id @default(uuid())
-  name   String
-  userId String @unique
+  id           String  @id @default(uuid())
+  name         String
+  userId       String  @unique
+  institutionalId String? @unique
 
   qualification  String?
   specialization String?

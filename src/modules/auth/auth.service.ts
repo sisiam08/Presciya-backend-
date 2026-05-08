@@ -56,20 +56,12 @@ const signUp = async (userData: ISignUpUserType) => {
       });
     }
 
-    if (
-      user.role === UserRole.DOCTOR_INSTITUTIONAL ||
-      user.role === UserRole.DOCTOR_PERSONAL
-    ) {
-      const doctorType =
-        user.role === UserRole.DOCTOR_INSTITUTIONAL
-          ? DoctorType.INSTITUTIONAL
-          : DoctorType.PERSONAL;
-
+    if (user.role === UserRole.DOCTOR_PERSONAL) {
       await tx.doctor.create({
         data: {
           name: user.name,
           userId: user.id,
-          type: doctorType,
+          type: DoctorType.PERSONAL,
         },
       });
     }
