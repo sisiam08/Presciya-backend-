@@ -3,6 +3,10 @@ import catchAsync from "../../utils/catchAsync";
 import sendResponse from "../../utils/sendResponse";
 import { DoctorServices } from "./doctor.service";
 import { Status } from "../../errors/httpStatus";
+import { createAppError } from "../../errors/appError";
+import { IUpdateDoctorProfile } from "../../interface";
+import sharp from "sharp";
+import { uploadFileToCloudinary } from "../../config/cloudinary.config";
 
 const assignDoctor = catchAsync(async (req: Request, res: Response) => {
   const institutionalId = req.user?.id!;
@@ -60,8 +64,52 @@ const getMyDoctors = catchAsync(async (req: Request, res: Response) => {
 });
 
 const updateDoctorProfile = catchAsync(async (req: Request, res: Response) => {
+  const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+  const doctorUpdateData: IUpdateDoctorProfile = { ...req.body };
+
+  const uploadTasks: Promise<void>[] = [];
+
+  const signatureFile = files?.signature?.[0];
+  if (signatureFile) {
+    uploadTasks.push(
+      (async () => {
+        const buffer = await sharp(signatureFile.buffer)
+          .resize(800, 400, { fit: "inside" })
+          .webp({ quality: 80 })
+          .toBuffer();
+        const result = await uploadFileToCloudinary(
+          buffer,
+          signatureFile.originalname.replace(/\.[^.]+$/, ".webp"),
+        );
+        doctorUpdateData.signature = result.secure_url;
+      })(),
+    );
+  }
+
+  const imageFile = files?.image?.[0];
+  if (imageFile) {
+    uploadTasks.push(
+      (async () => {
+        const buffer = await sharp(imageFile.buffer)
+          .resize(500, 500, { fit: "cover" })
+          .webp({ quality: 80 })
+          .toBuffer();
+        const result = await uploadFileToCloudinary(
+          buffer,
+          imageFile.originalname.replace(/\.[^.]+$/, ".webp"),
+        );
+        doctorUpdateData.image = result.secure_url;
+      })(),
+    );
+  }
+
+  await Promise.all(uploadTasks);
+
   const userId = req.user?.id!;
-  const data = await DoctorServices.updateDoctorProfile(req.body, userId);
+  const data = await DoctorServices.updateDoctorProfile(
+    doctorUpdateData,
+    userId,
+  );
   sendResponse(res, {
     statusCode: Status.OK,
     success: true,

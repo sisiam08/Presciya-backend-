@@ -13,11 +13,10 @@ const AssignDoctorSchema = z.object({
 
 const UpdateDoctorProfileSchema = z.object({
   body: z.object({
-    name: z.string().min(3, "Name must be at least 3 characters long").optional(),
-    qualification: z.string().optional(),
-    specialization: z.string().optional(),
-    registrationNo: z.string().min(1, "Registration number is required"),
-    signature: z.string().optional(),
+    name: z
+      .string()
+      .min(3, "Name must be at least 3 characters long")
+      .optional(),
     phone: z
       .array(
         z.object({
@@ -31,9 +30,16 @@ const UpdateDoctorProfileSchema = z.object({
         }),
       )
       .optional(),
+    image: z.string().optional(),
+    qualification: z.string().optional(),
+    specialization: z.string().optional(),
+    registrationNo: z
+      .string()
+      .min(1, "Registration number is required")
+      .regex(/^A-\d{6}$/, "Registration number must be in format A-123456"),
+    signature: z.string().optional(),
   }),
 });
-
 
 export const DoctorValidation = {
   AssignDoctorSchema,

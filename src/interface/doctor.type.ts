@@ -3,6 +3,7 @@ import { IContactType } from "./contact.type";
 export interface IUpdateDoctorProfile {
   name?: string;
   phone?: IContactType[];
+  image: string;
   qualification?: string;
   specialization?: string;
   registrationNo: string;

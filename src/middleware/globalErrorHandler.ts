@@ -2,12 +2,35 @@ import { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
 import { Prisma } from "../../generated/prisma/client";
 
+import { v2 as cloudinary } from "cloudinary";
+
 function globalErrorHandler(
   err: any,
   req: Request,
   res: Response,
   next: NextFunction,
 ) {
+  // Clean up any files that were uploaded to Cloudinary during this failed request
+  if (req.file || req.files) {
+    const filesToDelete: string[] = [];
+    if (req.file && (req.file as any).filename) {
+      filesToDelete.push((req.file as any).filename);
+    }
+    if (req.files) {
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      for (const key in files) {
+        files[key]?.forEach((file: any) => {
+          if (file.filename) filesToDelete.push(file.filename);
+        });
+      }
+    }
+    if (filesToDelete.length > 0) {
+      Promise.all(
+        filesToDelete.map((publicId) => cloudinary.uploader.destroy(publicId))
+      ).catch((e) => console.error("Cloudinary cleanup failed:", e));
+    }
+  }
+
   let statusCode = err.statusCode || 500;
   let errorMessage = err.message || "Internal server error!";
   let errorDetails = null;

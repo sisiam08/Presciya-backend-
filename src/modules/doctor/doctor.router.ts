@@ -4,6 +4,7 @@ import { DoctorValidation } from "./doctor.validation";
 import validateRequest from "../../middleware/validateRequest";
 import { auth_middleware } from "../../middleware/auth";
 import { UserRole } from "../../../generated/prisma/enums";
+import { upload } from "../../config/multer.config";
 
 const router = Router();
 
@@ -41,6 +42,7 @@ router.get(
 router.patch(
   "/profile",
   auth_middleware([UserRole.DOCTOR_PERSONAL, UserRole.DOCTOR_INSTITUTIONAL]),
+  upload.fields([{ name: "signature", maxCount: 1 }, { name: "image", maxCount: 1 }]),
   validateRequest(DoctorValidation.UpdateDoctorProfileSchema),
   DoctorControllers.updateDoctorProfile,
 );

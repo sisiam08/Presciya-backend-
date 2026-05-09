@@ -2,7 +2,6 @@ import { Router } from "express";
 import { IRoute } from "../interface";
 import { AuthRouters } from "../modules/auth/auth.router";
 import { DoctorRouters } from "../modules/doctor/doctor.router";
-
 const router = Router();
 
 const routes: IRoute[] = [

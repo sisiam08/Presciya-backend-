@@ -5,6 +5,8 @@ import { IAssignDoctor, IUpdateDoctorProfile } from "../../interface";
 import { prisma } from "../../lib/prisma";
 import { DoctorType, UserRole } from "../../../generated/prisma/enums";
 
+import { deleteFileFromCloudinary } from "../../config/cloudinary.config";
+
 const assignDoctor = async (doctorData: IAssignDoctor) => {
   const { name, email, password, institutionalId } = doctorData;
 
@@ -84,17 +86,39 @@ const updateDoctorProfile = async (
   data: IUpdateDoctorProfile,
   userId: string,
 ) => {
-  const { phone, ...rest } = data;
+  const { phone, image, ...rest } = data;
   const user = await prisma.user.findUnique({
     where: {
       id: userId,
     },
     select: {
       name: true,
+      image: true,
+      doctor: {
+        select: {
+          signature: true,
+        },
+      },
     },
   });
 
   return await prisma.$transaction(async (tx) => {
+    // Delete old signature if a new one is provided (Decoupled to prevent blocking response)
+    if (rest.signature && user?.doctor?.signature) {
+      const oldSig = user.doctor.signature;
+      setTimeout(() => {
+        deleteFileFromCloudinary(oldSig).catch(console.error);
+      }, 0);
+    }
+    
+    // Delete old profile image if a new one is provided (Decoupled to prevent blocking response)
+    if (image && user?.image) {
+      const oldImg = user.image;
+      setTimeout(() => {
+        deleteFileFromCloudinary(oldImg).catch(console.error);
+      }, 0);
+    }
+
     const doctor = await tx.doctor.update({
       where: {
         userId,
@@ -102,13 +126,14 @@ const updateDoctorProfile = async (
       data: rest,
     });
 
-    if (user?.name !== doctor.name) {
+    if (user?.name !== doctor.name || image) {
       await tx.user.update({
         where: {
           id: userId,
         },
         data: {
-          name: data.name!,
+          ...(user?.name !== doctor.name && { name: doctor.name }),
+          ...(image && { image }),
         },
       });
     }

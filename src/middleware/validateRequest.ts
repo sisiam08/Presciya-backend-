@@ -1,6 +1,8 @@
 import { ZodObject } from "zod";
 import catchAsync from "../utils/catchAsync";
 import { NextFunction, Request, Response } from "express";
+import { createAppError } from "../errors/appError";
+import { Status } from "../errors/httpStatus";
 
 const validateRequest = (schema: ZodObject) => {
   return catchAsync(async (req: Request, res: Response, next: NextFunction) => {
@@ -10,10 +12,7 @@ const validateRequest = (schema: ZodObject) => {
         req.body = { ...req.body, ...parsedData };
         delete req.body.data;
       } catch (e) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid JSON in request body",
-        });
+        throw createAppError("Invalid JSON in request body", Status.BAD_REQUEST);
       }
     }
     await schema.parseAsync({
