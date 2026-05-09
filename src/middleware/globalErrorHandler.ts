@@ -24,9 +24,26 @@ function globalErrorHandler(
     errorMessage = "You provide incorrect field type or missing fields!";
   } else if (err instanceof Prisma.PrismaClientKnownRequestError) {
     if (err.code === "P2025") {
-      ((statusCode = 404), (errorMessage = "Records not found!"));
+      statusCode = 404;
+      errorMessage = "Records not found!";
     } else if (err.code === "P2003") {
-      ((statusCode = 404), (errorMessage = "Foreign key constraint failed!"));
+      statusCode = 404;
+      errorMessage = "Foreign key constraint failed!";
+    } else if (err.code === "P2002") {
+      statusCode = 409;
+      let fields = "field";
+      const target = err.meta?.target;
+      if (Array.isArray(target)) {
+        fields = target.join(", ");
+      } else if (typeof target === "string") {
+        fields = target;
+      } else {
+        const match = err.message.match(/Unique constraint failed on the fields: \(`([^]+)`\)/);
+        if (match && match[1]) {
+          fields = match[1].replace(/["']/g, "");
+        }
+      }
+      errorMessage = `Duplicate entry! This ${fields} already exists.`;
     }
   } else if (err instanceof Prisma.PrismaClientUnknownRequestError) {
     statusCode = 500;

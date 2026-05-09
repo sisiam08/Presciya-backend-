@@ -1,5 +1,4 @@
 import { UserRole } from "../../generated/prisma/enums";
-import { IContactType } from "./contact.type";
 
 export interface ISignUpUserType {
   name: string;
@@ -22,4 +21,11 @@ export interface IResetPasswordType {
   email: string;
   password: string;
   token: string;
+}
+
+export interface IAuthorizedUser {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
 }

@@ -1,12 +1,16 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "../src/lib/prisma";
 import { UserRole } from "../generated/prisma/enums";
+import config from "../src/config";
 
 export async function seed() {
   console.log("Starting seed...");
 
   // Create a seed admin
-  const hashedPassword = await bcrypt.hash("@SuperAdmin@123!", 10);
+  const hashedPassword = await bcrypt.hash(
+    "@SuperAdmin@123!",
+    config.bcrypt.bcryptSaltRound,
+  );
 
   const admin = await prisma.user.upsert({
     where: {

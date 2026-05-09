@@ -9,12 +9,7 @@ import {
   DoctorType,
   UserRole,
 } from "../../../generated/prisma/enums";
-
-const jwtSecret: jwt.Secret =
-  process.env.JWT_SECRET ??
-  "dfasdfgsddf*&^^*%^*36472348623*&^*&^b2386t&^%^%$#^%#&%$rv6rr%R&^$&^$&$676R$&^%&^$*6v65$&^%$&%";
-const jwtExpiresIn: NonNullable<jwt.SignOptions["expiresIn"]> = (process.env
-  .JWT_EXPIRES_IN ?? "4d") as NonNullable<jwt.SignOptions["expiresIn"]>;
+import config from "../../config";
 
 const signUp = async (userData: ISignUpUserType) => {
   const { name, email, password, role, phone } = userData;
@@ -32,7 +27,10 @@ const signUp = async (userData: ISignUpUserType) => {
     throw createAppError("User already exists", Status.CONFLICT);
   }
 
-  const hashedPassword = await bcrypt.hash(password, 10);
+  const hashedPassword = await bcrypt.hash(
+    password,
+    config.bcrypt.bcryptSaltRound,
+  );
 
   const data = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
@@ -71,9 +69,9 @@ const signUp = async (userData: ISignUpUserType) => {
 
   const token = jwt.sign(
     { id: data.id, name: data.name, email: data.email, role: data.role },
-    jwtSecret,
+    config.jwt.jwtSecret,
     {
-      expiresIn: jwtExpiresIn,
+      expiresIn: config.jwt.jwtExpiresIn,
     },
   );
 
@@ -108,9 +106,9 @@ const logIn = async (userData: ILogInUserType) => {
 
   const token = jwt.sign(
     { id: user.id, name: user.name, email: user.email, role: user.role },
-    jwtSecret,
+    config.jwt.jwtSecret,
     {
-      expiresIn: jwtExpiresIn,
+      expiresIn: config.jwt.jwtExpiresIn,
     },
   );
 

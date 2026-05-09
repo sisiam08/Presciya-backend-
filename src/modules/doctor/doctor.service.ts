@@ -3,9 +3,10 @@ import { createAppError } from "../../errors/appError";
 import { Status } from "../../errors/httpStatus";
 import { IAssignDoctor, IUpdateDoctorProfile } from "../../interface";
 import { prisma } from "../../lib/prisma";
+import { DoctorType, UserRole } from "../../../generated/prisma/enums";
 
 const assignDoctor = async (doctorData: IAssignDoctor) => {
-  const { name, email, password, institutionalId, role, type } = doctorData;
+  const { name, email, password, institutionalId } = doctorData;
 
   const existingUser = await prisma.user.findUnique({
     where: {
@@ -28,7 +29,7 @@ const assignDoctor = async (doctorData: IAssignDoctor) => {
         name,
         email,
         password: hashedPassword,
-        role,
+        role: UserRole.DOCTOR_INSTITUTIONAL,
       },
       select: {
         id: true,
@@ -43,7 +44,7 @@ const assignDoctor = async (doctorData: IAssignDoctor) => {
         name: user.name,
         userId: user.id,
         institutionalId,
-        type,
+        type: DoctorType.INSTITUTIONAL,
       },
     });
 
@@ -83,11 +84,45 @@ const updateDoctorProfile = async (
   data: IUpdateDoctorProfile,
   userId: string,
 ) => {
-  return await prisma.doctor.update({
+  const { phone, ...rest } = data;
+  const user = await prisma.user.findUnique({
     where: {
-      userId,
+      id: userId,
     },
-    data,
+    select: {
+      name: true,
+    },
+  });
+
+  return await prisma.$transaction(async (tx) => {
+    const doctor = await tx.doctor.update({
+      where: {
+        userId,
+      },
+      data: rest,
+    });
+
+    if (user?.name !== doctor.name) {
+      await tx.user.update({
+        where: {
+          id: userId,
+        },
+        data: {
+          name: data.name!,
+        },
+      });
+    }
+
+    if (phone) {
+      await tx.contactNumber.createMany({
+        data: phone.map((p) => ({
+          ...p,
+          userId: doctor.userId,
+        })),
+      });
+    }
+
+    return doctor;
   });
 };
 

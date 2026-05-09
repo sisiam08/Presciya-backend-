@@ -97,7 +97,7 @@ model Doctor {
   id           String  @id @default(uuid())
   name         String
   userId       String  @unique
-  institutionalId String? @unique
+  institutionalId String?
 
   qualification  String?
   specialization String?
