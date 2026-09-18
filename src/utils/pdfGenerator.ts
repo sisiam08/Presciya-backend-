@@ -31,9 +31,19 @@ const escapeHtmlMultiline = (unsafe?: string | null): string => {
   return escapeHtml(unsafe).replace(/\n/g, "<br>");
 };
 
+// Only allow absolute http(s) URLs into rendered attributes. Prevents
+// javascript:/data: injection and unexpected resource loads (Section 14.5).
+const safeUrl = (url?: string | null): string => {
+  if (!url) return "";
+  const trimmed = String(url).trim();
+  if (!/^https?:\/\//i.test(trimmed)) return "";
+  return trimmed.replace(/"/g, "%22").replace(/'/g, "%27");
+};
+
 export const generatePrescriptionHtml = (data: IPdfRenderData): string => {
   const {
     id,
+    serialNumber,
     createdAt,
     complaints,
     diagnosis,
@@ -69,6 +79,17 @@ export const generatePrescriptionHtml = (data: IPdfRenderData): string => {
   const colorTheme = chamber?.templateConfig?.colorTheme || "#0f8374";
   const showLogo = chamber?.templateConfig?.showLogo !== false;
 
+  const generatedAtStr = new Date().toLocaleString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const disclaimer =
+    chamber?.templateConfig?.disclaimer ||
+    "This is a digitally generated prescription. Verify authenticity by scanning the QR code.";
+
   // Verification URL
   const verifyUrl = `${config.appUrl || "http://localhost:3000"}/verify/prescription/${id}`;
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(
@@ -80,8 +101,8 @@ export const generatePrescriptionHtml = (data: IPdfRenderData): string => {
   const docQualification = escapeHtml(doctor.qualification);
   const docSpecialization = escapeHtml(doctor.specialization);
   const docRegNo = escapeHtml(doctor.registrationNo);
-  const docSignature = doctor.signature; // signature is a verified URL, safe
-
+  const docSignature = safeUrl(doctor.signature);
+  const chamberLogo = showLogo ? safeUrl(chamber?.logo) : "";
   const chName = escapeHtml(chamber?.chamberName || "Private Practice");
   const chSlogan = escapeHtml(chamber?.chamberSlogan);
   const chAddress = escapeHtml(
@@ -93,6 +114,8 @@ export const generatePrescriptionHtml = (data: IPdfRenderData): string => {
   const patName = escapeHtml(patient.name);
   const patAge = escapeHtml(patient.age);
   const patGender = escapeHtml(patient.gender);
+  const patIdentifier = escapeHtml(patient.patientIdentifier);
+  const escSerial = escapeHtml(serialNumber);
   const patWeight = weight ? escapeHtml(weight) : "";
   const patAllergies = escapeHtml(patient.allergies);
   const patChronic = escapeHtml(patient.chronicDiseases);
@@ -158,7 +181,7 @@ export const generatePrescriptionHtml = (data: IPdfRenderData): string => {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Prescription - ${patient.name}</title>
+  <title>Prescription - ${patName}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
     
@@ -179,6 +202,11 @@ export const generatePrescriptionHtml = (data: IPdfRenderData): string => {
       background-color: #ffffff;
       font-size: 14px;
       line-height: 1.5;
+      /* A4 printable height (297mm - 15mm top - 20mm bottom) so a single-page
+         prescription anchors its footer to the bottom of the page. */
+      display: flex;
+      flex-direction: column;
+      min-height: 262mm;
     }
 
     /* Print-specific rules */
@@ -187,11 +215,11 @@ export const generatePrescriptionHtml = (data: IPdfRenderData): string => {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
-      .page-footer {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
+      /* Never split the header, patient banner or an individual medicine
+         across a page boundary (Section 14.3). */
+      .header,
+      .patient-banner {
+        page-break-inside: avoid;
       }
     }
 
@@ -215,7 +243,9 @@ export const generatePrescriptionHtml = (data: IPdfRenderData): string => {
       position: relative;
       z-index: 1;
       width: 100%;
-      height: 100%;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
     }
 
     /* Header double-column */
@@ -431,12 +461,33 @@ export const generatePrescriptionHtml = (data: IPdfRenderData): string => {
     .page-footer {
       border-top: 1px solid #e0e0e0;
       padding-top: 10px;
-      margin-top: 30px;
+      /* Push the signature/footer to the bottom of the final page when there is
+         leftover whitespace (Section 14.3, Case A). */
+      margin-top: auto;
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
       font-size: 11px;
       color: #888888;
+    }
+
+    .chamber-logo {
+      max-height: 48px;
+      max-width: 150px;
+      margin-bottom: 6px;
+    }
+
+    .footer-meta {
+      max-width: 260px;
+      padding: 0 12px;
+      text-align: center;
+    }
+
+    .footer-disclaimer {
+      font-size: 9px;
+      color: #999999;
+      margin-top: 4px;
+      line-height: 1.3;
     }
 
     .footer-qr {
@@ -488,9 +539,10 @@ export const generatePrescriptionHtml = (data: IPdfRenderData): string => {
         <h1 class="doctor-name">Dr. ${docName}</h1>
         <p class="doctor-qualification">${docQualification}</p>
         <p class="doctor-specialty">${docSpecialization}</p>
-        ${docRegNo ? `<span class="doctor-reg">BMDC Reg No: ${docRegNo}</span>` : ""}
+        ${docRegNo && doctor.bmdcApproved ? `<span class="doctor-reg">BMDC Reg No: ${docRegNo}</span>` : ""}
       </div>
       <div class="chamber-info">
+        ${chamberLogo ? `<img class="chamber-logo" src="${chamberLogo}" alt="Chamber Logo">` : ""}
         <h2 class="chamber-name">${chName}</h2>
         ${chSlogan ? `<p class="chamber-slogan">${chSlogan}</p>` : ""}
         <p class="chamber-detail">${chAddress}</p>
@@ -505,7 +557,9 @@ export const generatePrescriptionHtml = (data: IPdfRenderData): string => {
       <span class="patient-field"><strong>Age:</strong> ${patAge} Yrs</span>
       <span class="patient-field"><strong>Gender:</strong> ${patGender}</span>
       ${patWeight ? `<span class="patient-field"><strong>Weight:</strong> ${patWeight} kg</span>` : ""}
+      ${patIdentifier ? `<span class="patient-field"><strong>Patient ID:</strong> ${patIdentifier}</span>` : ""}
       <span class="patient-field"><strong>Date:</strong> ${dateStr}</span>
+      ${escSerial ? `<span class="patient-field"><strong>Rx No:</strong> ${escSerial}</span>` : ""}
     </div>
 
     <!-- Main Content Body -->
@@ -583,7 +637,12 @@ export const generatePrescriptionHtml = (data: IPdfRenderData): string => {
           Scan to verify prescription authenticity.
         </div>
       </div>
-      
+
+      <div class="footer-meta">
+        <div class="footer-disclaimer">${escapeHtml(disclaimer)}</div>
+        <div style="font-size: 9px; color: #aaaaaa; margin-top: 4px;">Generated: ${escapeHtml(generatedAtStr)}</div>
+      </div>
+
       <div class="signature-block">
         ${
           docSignature

@@ -5,6 +5,7 @@ import {
   PrescriptionStatus,
   WorkspaceRole,
   WorkspaceType,
+  VerificationStatus,
   AuditActionType,
   AuditEntityType,
 } from "../../../generated/prisma/enums";
@@ -432,10 +433,20 @@ const getMyPrescriptions = async (
   };
 };
 
-const compileHtmlPrescription = async (id: string): Promise<string> => {
-  // Print/download are only permitted for finalized prescriptions (Section 13.3).
+const compileHtmlPrescription = async (
+  id: string,
+  options: { requireFinalized?: boolean } = {},
+): Promise<string> => {
+  const requireFinalized = options.requireFinalized !== false;
+
+  // Print/download are only permitted for finalized prescriptions (Section
+  // 13.3); an authenticated preview may render a draft.
   const prescription = await prisma.prescription.findFirst({
-    where: { id, status: PrescriptionStatus.FINALIZED, isDeleted: false },
+    where: {
+      id,
+      isDeleted: false,
+      ...(requireFinalized && { status: PrescriptionStatus.FINALIZED }),
+    },
     include: {
       prescriptionMedicines: true,
       clinicalObservations: true,
@@ -499,6 +510,8 @@ const compileHtmlPrescription = async (id: string): Promise<string> => {
       specialization: doctorProfile?.specialization || "",
       registrationNo: doctorProfile?.bmdcNumber || "",
       signature: doctorProfile?.signatureUrl || "",
+      bmdcApproved:
+        doctorProfile?.verificationStatus === VerificationStatus.APPROVED,
     },
     chamber: prescription.chamber
       ? {
@@ -694,6 +707,24 @@ const verifyPrescriptionPublic = async (id: string) => {
   };
 };
 
+/**
+ * Authenticated preview of the canonical print layout. Renders drafts as well
+ * as finalized prescriptions so the browser preview and the printed output
+ * share one renderer (Section 14.4).
+ */
+const previewPrescription = async (id: string, workspaceId: string) => {
+  const prescription = await prisma.prescription.findFirst({
+    where: { id, workspaceId, isDeleted: false },
+    select: { id: true },
+  });
+
+  if (!prescription) {
+    throw createAppError("Prescription not found", Status.NOT_FOUND);
+  }
+
+  return compileHtmlPrescription(id, { requireFinalized: false });
+};
+
 export const PrescriptionServices = {
   createPrescription,
   getPrescriptionById,
@@ -702,6 +733,7 @@ export const PrescriptionServices = {
   getMyPrescriptions,
   finalizePrescription,
   compileHtmlPrescription,
+  previewPrescription,
   logPrint,
   verifyPrescriptionPublic,
 };

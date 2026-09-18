@@ -134,6 +134,17 @@ const printPrescription = catchAsync(async (req: Request, res: Response) => {
   res.status(Status.OK).send(html);
 });
 
+const previewPrescription = catchAsync(async (req: Request, res: Response) => {
+  const id = requireStringParam(req.params.id, "Prescription ID");
+  const workspaceId = (req as any).workspaceId as string;
+
+  // Canonical A4 layout (same renderer as print), authenticated & workspace-scoped.
+  const html = await PrescriptionServices.previewPrescription(id, workspaceId);
+
+  res.setHeader("Content-Type", "text/html");
+  res.status(Status.OK).send(html);
+});
+
 const verifyPrescription = catchAsync(async (req: Request, res: Response) => {
   const id = requireStringParam(req.params.id, "Prescription ID");
   const result = await PrescriptionServices.verifyPrescriptionPublic(id);
@@ -154,5 +165,6 @@ export const PrescriptionControllers = {
   getMyPrescriptions,
   finalizePrescription,
   printPrescription,
+  previewPrescription,
   verifyPrescription,
 };

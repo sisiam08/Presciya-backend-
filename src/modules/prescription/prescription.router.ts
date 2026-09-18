@@ -37,6 +37,21 @@ router.get(
   PrescriptionControllers.getMyPrescriptions,
 );
 
+// Authenticated A4 preview (draft or finalized) — canonical print layout
+router.get(
+  "/:id/preview",
+  authWorkspace(
+    [
+      WorkspaceRole.DOCTOR,
+      WorkspaceRole.OWNER,
+      WorkspaceRole.ASSISTANT,
+      WorkspaceRole.MANAGER,
+    ],
+    { resource: "prescription" },
+  ) as any,
+  PrescriptionControllers.previewPrescription,
+);
+
 // Get prescription by ID (prescription owner or OWNER in workspace)
 router.get(
   "/:id",

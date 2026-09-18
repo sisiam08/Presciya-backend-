@@ -19,6 +19,9 @@ export interface IPdfRenderData {
     specialization?: string | null;
     registrationNo?: string | null;
     signature?: string | null;
+    // BMDC registration is only printed once the doctor is professionally
+    // approved (Section 14.2).
+    bmdcApproved?: boolean;
   };
   chamber?: {
     chamberName: string;
@@ -37,7 +40,9 @@ export interface IPdfRenderData {
     bloodGroup?: string | null;
     allergies?: string | null;
     chronicDiseases?: string | null;
+    patientIdentifier?: string | null;
   };
+  serialNumber?: string | null;
 }
 
 export {};
