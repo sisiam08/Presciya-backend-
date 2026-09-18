@@ -115,6 +115,14 @@ describe("prescription rendering — language", () => {
     expect(html).toContain("Rahim");
   });
 
+  it("Bangla does NOT translate the patient name or the prescription date", () => {
+    const html = generatePrescriptionHtml(banglaData());
+    // Patient name stays exactly as entered (a proper name).
+    expect(html).toContain("Rahim");
+    // The prescription date keeps the default format (createdAt = Jan 2026).
+    expect(html).toContain("January");
+  });
+
   it("embeds a Bengali-capable font for both languages", () => {
     const html = generatePrescriptionHtml(baseData());
     expect(html).toContain("Noto+Sans+Bengali");

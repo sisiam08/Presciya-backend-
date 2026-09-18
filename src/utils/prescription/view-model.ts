@@ -192,7 +192,14 @@ export const buildPrescriptionViewModel = (
     PrescriptionDesignTemplate.DEFAULT;
   const labels = getPrescriptionLabels(language);
 
-  const dateStr = formatPrescriptionDate(new Date(createdAt), language);
+  // The prescription date is general metadata, NOT one of the four
+  // language-aware parts, so it keeps the default format. Only Next Visit
+  // (an explicit language-aware part) localises its date.
+  const dateStr = new Date(createdAt).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 
   const nextVisitStr = nextVisitDate
     ? formatPrescriptionDate(new Date(nextVisitDate), language)

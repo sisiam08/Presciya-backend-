@@ -1114,7 +1114,6 @@ const previewTemplateSample = async (
         clinicalNotes: "প্রচুর পানি পান করুন এবং সম্পূর্ণ বিশ্রাম নিন।",
         advises: "কোর্সটি সম্পূর্ণ করুন। তিন দিনের বেশি জ্বর থাকলে পুনরায় আসুন।",
         instruction: "খাবারের পরে পানি দিয়ে খান।",
-        patientName: "মোঃ রহিম উদ্দিন",
         allergies: "কোনোটি নয়",
         chronicDiseases: "কোনোটি নয়",
       }
@@ -1125,7 +1124,6 @@ const previewTemplateSample = async (
         advises:
           "Complete the full course. Return if the fever persists beyond 3 days.",
         instruction: "Take after meals with plenty of water.",
-        patientName: "Md. Rahim Uddin",
         allergies: "None known",
         chronicDiseases: "None",
       };
@@ -1210,7 +1208,8 @@ const previewTemplateSample = async (
           chamberPhone: [{ phone: "+880 1700-000000" }],
         },
     patient: {
-      name: sample.patientName,
+      // Patient names are proper names and are never translated.
+      name: "Md. Rahim Uddin",
       age: 35,
       gender: "MALE",
       phone: "01711111111",
