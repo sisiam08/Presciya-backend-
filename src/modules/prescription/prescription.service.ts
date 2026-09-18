@@ -405,6 +405,10 @@ const getMyPrescriptions = async (
       include: {
         patient: { select: { name: true, phone: true } },
         chamber: { select: { name: true } },
+        // The list/edit UI needs the medicine lines; without them the builder
+        // would appear empty and saving could wipe existing medicines.
+        prescriptionMedicines: true,
+        clinicalObservations: true,
       },
     }),
     prisma.prescription.count({ where: query }),

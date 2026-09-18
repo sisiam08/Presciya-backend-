@@ -222,4 +222,81 @@ export const adminService = {  // User management
       monthlyRevenue: monthlyRevenue._sum.amount ?? 0,
     };
   },
+
+  // Medicine catalog management (platform reference data, not workspace-scoped)
+  async listMedicines(query: {
+    q?: string | undefined;
+    page?: unknown;
+    limit?: unknown;
+  }) {
+    const { page, limit, skip } = getPaginationParams(query.page, query.limit);
+    const q = query.q?.trim();
+
+    const where = q
+      ? {
+          OR: [
+            { brandName: { contains: q, mode: "insensitive" as const } },
+            { generic: { contains: q, mode: "insensitive" as const } },
+            { manufacturer: { contains: q, mode: "insensitive" as const } },
+          ],
+        }
+      : {};
+
+    const [items, total] = await Promise.all([
+      prisma.medicine.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { brandName: "asc" },
+      }),
+      prisma.medicine.count({ where }),
+    ]);
+
+    return buildPaginatedResult(items, total, page, limit);
+  },
+
+  async createMedicine(data: {
+    brandName: string;
+    generic: string;
+    dosageForm?: string;
+    type?: string;
+    strength?: string;
+    manufacturer?: string;
+    slug?: string;
+  }) {
+    const brandName = data.brandName?.trim();
+    const generic = data.generic?.trim();
+    if (!brandName || !generic) {
+      throw new Error("brandName and generic are required");
+    }
+
+    const slugify = (v: string) =>
+      v
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)+/g, "");
+
+    const baseSlug =
+      data.slug?.trim() ||
+      `${slugify(brandName)}-${slugify(data.strength || generic)}`;
+
+    // Ensure a unique slug
+    let slug = baseSlug;
+    let suffix = 1;
+    while (await prisma.medicine.findUnique({ where: { slug } })) {
+      slug = `${baseSlug}-${suffix++}`;
+    }
+
+    return prisma.medicine.create({
+      data: {
+        brandName,
+        generic,
+        slug,
+        dosageForm: data.dosageForm || "Tablet",
+        type: data.type || data.dosageForm || "Tablet",
+        strength: data.strength || null,
+        manufacturer: data.manufacturer || null,
+      },
+    });
+  },
 };

@@ -3,7 +3,10 @@ import catchAsync from "../../utils/catchAsync";
 import { AnalyticsServices } from "./analytics.service";
 import sendResponse from "../../utils/sendResponse";
 import { Status } from "../../errors/httpStatus";
-import { WorkspaceRole } from "../../../generated/prisma/enums";
+import {
+  WorkspaceRole,
+  WorkspaceType,
+} from "../../../generated/prisma/enums";
 import { AuthenticatedRequest } from "../../middleware/auth";
 
 const getDashboardAnalytics = catchAsync(
@@ -11,25 +14,16 @@ const getDashboardAnalytics = catchAsync(
     const userId = req.user?.id as string;
     const workspaceId = req.workspaceId as string;
     const workspaceRole = req.workspaceRole as WorkspaceRole;
+    const workspaceType = req.user?.workspaceType as WorkspaceType | undefined;
 
-    let result;
-    // For institutional workspaces, OWNER can see institution analytics
-    if (workspaceRole === WorkspaceRole.OWNER) {
-      result = await AnalyticsServices.getInstitutionAnalytics(workspaceId);
-    } else if (
-      workspaceRole === WorkspaceRole.DOCTOR ||
-      workspaceRole === WorkspaceRole.MANAGER
-    ) {
-      // Regular doctors see only their analytics
-      result = await AnalyticsServices.getDoctorAnalytics(userId);
-    } else {
-      return sendResponse(res, {
-        statusCode: Status.BAD_REQUEST,
-        success: false,
-        message: "Analytics reports are not supported for your workspace role.",
-        data: null,
-      });
-    }
+    // Decide by workspace TYPE, not role alone: a personal-workspace OWNER is a
+    // doctor, not an institution. Only institution workspaces (excluding
+    // doctors) get institution analytics.
+    const result =
+      workspaceType === WorkspaceType.INSTITUTION &&
+      workspaceRole !== WorkspaceRole.DOCTOR
+        ? await AnalyticsServices.getInstitutionAnalytics(workspaceId)
+        : await AnalyticsServices.getDoctorAnalytics(userId);
 
     sendResponse(res, {
       statusCode: Status.OK,

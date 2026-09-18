@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { prisma } from "../../lib/prisma";
 import { ILogInUserType, ISignUpUserType } from "../../interface";
 import jwt from "jsonwebtoken";
@@ -63,6 +64,9 @@ const generateTokens = (user: {
   workspaceRole?: WorkspaceRole;
   activeWorkspaceId?: string;
 }) => {
+  // `jti` guarantees each token is unique even when two logins happen within
+  // the same second (otherwise the refresh token string could collide and the
+  // session insert would fail with a duplicate-key error).
   const accessToken = jwt.sign(
     {
       id: user.userId,
@@ -70,6 +74,7 @@ const generateTokens = (user: {
       workspaceType: user.workspaceType,
       workspaceRole: user.workspaceRole,
       activeWorkspaceId: user.activeWorkspaceId,
+      jti: crypto.randomUUID(),
     },
     config.jwt.jwtSecret,
     {
@@ -77,9 +82,23 @@ const generateTokens = (user: {
     },
   );
 
-  const refreshToken = jwt.sign({ id: user.userId }, config.jwt.jwtSecret, {
-    expiresIn: "7d",
-  });
+  // The refresh token must carry the workspace context too, otherwise a token
+  // rotation would silently drop `activeWorkspaceId` and every workspace-scoped
+  // route that resolves the workspace from the token would start failing with
+  // "Workspace context required".
+  const refreshToken = jwt.sign(
+    {
+      id: user.userId,
+      workspaceType: user.workspaceType,
+      workspaceRole: user.workspaceRole,
+      activeWorkspaceId: user.activeWorkspaceId,
+      jti: crypto.randomUUID(),
+    },
+    config.jwt.jwtSecret,
+    {
+      expiresIn: "7d",
+    },
+  );
 
   return { accessToken, refreshToken };
 };

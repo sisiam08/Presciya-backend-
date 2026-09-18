@@ -246,6 +246,11 @@ const listAppointments = async (
       skip,
       take: limitNum,
       orderBy: { appointmentDate: "asc" },
+      include: {
+        patient: { select: { id: true, name: true, phone: true, age: true, gender: true } },
+        doctor: { select: { id: true, name: true } },
+        chamber: { select: { id: true, name: true } },
+      },
     }),
     prisma.appointment.count({ where }),
   ]);

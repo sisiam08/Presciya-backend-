@@ -8,7 +8,7 @@ import { AuthenticatedRequest } from "../../middleware/auth";
 
 const createInstitution = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const workspaceId = req.user?.activeWorkspaceId as string;
+    const workspaceId = (req as any).workspaceId as string;
     const result = await InstitutionServices.createInstitutionWithVerification(
       workspaceId,
       req.body,
@@ -25,7 +25,7 @@ const createInstitution = catchAsync(
 
 const getInstitutionProfile = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const workspaceId = req.user?.activeWorkspaceId as string;
+    const workspaceId = (req as any).workspaceId as string;
     const result = await InstitutionServices.getInstitutionProfile(workspaceId);
 
     sendResponse(res, {
@@ -39,7 +39,7 @@ const getInstitutionProfile = catchAsync(
 
 const updateInstitution = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const workspaceId = req.user?.activeWorkspaceId as string;
+    const workspaceId = (req as any).workspaceId as string;
     const result = await InstitutionServices.updateInstitution(
       workspaceId,
       req.body,
@@ -56,7 +56,7 @@ const updateInstitution = catchAsync(
 
 const updateBranding = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const workspaceId = req.user?.activeWorkspaceId as string;
+    const workspaceId = (req as any).workspaceId as string;
     const result = await InstitutionServices.updateBranding(
       workspaceId,
       req.body,
@@ -73,7 +73,7 @@ const updateBranding = catchAsync(
 
 const createDepartment = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const workspaceId = req.user?.activeWorkspaceId as string;
+    const workspaceId = (req as any).workspaceId as string;
     const result = await InstitutionServices.createDepartment(
       workspaceId,
       req.body,
@@ -90,7 +90,7 @@ const createDepartment = catchAsync(
 
 const getDepartments = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const workspaceId = req.user?.activeWorkspaceId as string;
+    const workspaceId = (req as any).workspaceId as string;
     const result = await InstitutionServices.getDepartments(workspaceId);
 
     sendResponse(res, {
@@ -104,7 +104,7 @@ const getDepartments = catchAsync(
 
 const assignDoctor = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const workspaceId = req.user?.activeWorkspaceId as string;
+    const workspaceId = (req as any).workspaceId as string;
     const result = await InstitutionServices.assignDoctor(
       workspaceId,
       req.body,
@@ -121,7 +121,7 @@ const assignDoctor = catchAsync(
 
 const removeDoctor = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const workspaceId = req.user?.activeWorkspaceId as string;
+    const workspaceId = (req as any).workspaceId as string;
     const doctorId = requireStringParam(req.params.doctorId, "Doctor ID");
     await InstitutionServices.removeDoctor(workspaceId, doctorId);
 
@@ -136,7 +136,7 @@ const removeDoctor = catchAsync(
 
 const getAssignedDoctors = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const workspaceId = req.user?.activeWorkspaceId as string;
+    const workspaceId = (req as any).workspaceId as string;
     const result = await InstitutionServices.getAssignedDoctors(workspaceId);
 
     sendResponse(res, {

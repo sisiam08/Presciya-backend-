@@ -159,4 +159,34 @@ router.get(
   },
 );
 
+// Medicine catalog (platform reference data)
+router.get(
+  "/medicines",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { q, page, limit } = req.query;
+      const result = await adminService.listMedicines({
+        q: q as string | undefined,
+        page,
+        limit,
+      });
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+router.post(
+  "/medicines",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await adminService.createMedicine(req.body);
+      res.status(201).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 export default router;

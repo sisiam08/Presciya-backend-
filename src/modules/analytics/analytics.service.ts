@@ -152,9 +152,19 @@ const getDoctorAnalytics = async (userId: string) => {
   };
 };
 
-const getInstitutionAnalytics = async (institutionId: string) => {
+const getInstitutionAnalytics = async (workspaceId: string) => {
+  // The controller passes a workspace id; resolve the institution that owns it.
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { ownerId: true },
+  });
+
+  if (!workspace) {
+    throw createAppError("Workspace not found", Status.NOT_FOUND);
+  }
+
   const inst = await prisma.institution.findUnique({
-    where: { id: institutionId },
+    where: { userId: workspace.ownerId },
   });
 
   if (!inst) {

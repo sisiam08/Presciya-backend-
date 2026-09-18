@@ -335,6 +335,16 @@ export const authWorkspace = (
         }
       }
 
+      // Fall back to the workspace the client declares via header. This is only
+      // a selector — membership is still re-validated below, so a forged value
+      // cannot grant access to a workspace the caller does not belong to.
+      if (!workspaceId) {
+        const headerWorkspaceId = req.headers["x-workspace-id"];
+        if (typeof headerWorkspaceId === "string" && headerWorkspaceId) {
+          workspaceId = headerWorkspaceId;
+        }
+      }
+
       if (!workspaceId) {
         throw createAppError(
           "Workspace context required. Please specify workspaceId or select active workspace",
