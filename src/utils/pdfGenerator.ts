@@ -131,6 +131,58 @@ export const generatePrescriptionHtml = (data: IPdfRenderData): string => {
   const escTemp = escapeHtml(temperature);
   const escHeight = escapeHtml(height);
 
+  // Format the duration from structured (value+unit) or legacy free text.
+  const formatDuration = (med: any): string => {
+    if (med.durationValue != null && med.durationUnit) {
+      const unit = String(med.durationUnit);
+      const plural = med.durationValue === 1 ? unit : `${unit}s`;
+      return `${med.durationValue} ${plural}`;
+    }
+    return med.duration || "";
+  };
+
+  // Build the dosage/instruction line adapted to the instruction type so no
+  // medicine is forced into a tablet shape (Section 13.1).
+  const buildDosage = (med: any): string => {
+    const usage = med.usageType || "DAILY";
+
+    if (usage === "WEEKLY") {
+      const parts = [med.dose || "Apply once"];
+      if (med.intervalDays) parts.push(`every ${med.intervalDays} days`);
+      return parts.join(" · ");
+    }
+
+    if (usage === "TOPICAL") {
+      const parts: string[] = [];
+      if (med.applicationAmount) parts.push(med.applicationAmount);
+      if (med.applicationArea) parts.push(`to ${med.applicationArea}`);
+      if (med.applicationFrequency) parts.push(med.applicationFrequency);
+      if (med.specificDays) parts.push(med.specificDays);
+      if (med.intervalDays) parts.push(`every ${med.intervalDays} days`);
+      return parts.join(" · ");
+    }
+
+    if (usage === "CUSTOM") {
+      const schedule = med.customScheduleJson;
+      if (schedule && typeof schedule === "object") {
+        return Object.entries(schedule)
+          .map(([key, value]) => `${key}: ${String(value)}`)
+          .join(", ");
+      }
+      return med.frequency || med.dosagePattern || "";
+    }
+
+    // DAILY / STANDARD
+    const hasStructuredFrequency =
+      med.frequencyMorning != null ||
+      med.frequencyNoon != null ||
+      med.frequencyNight != null;
+    const structured = hasStructuredFrequency
+      ? `${med.frequencyMorning ?? 0}+${med.frequencyNoon ?? 0}+${med.frequencyNight ?? 0}`
+      : "";
+    return structured || med.dosagePattern || med.frequency || "";
+  };
+
   // Compile Medicines HTML safely
   const medicinesHtml = medicines
     .map((med, index) => {
@@ -138,28 +190,38 @@ export const generatePrescriptionHtml = (data: IPdfRenderData): string => {
       const medStrength = escapeHtml(med.strength);
       const medType = escapeHtml(med.type);
       const medGeneric = escapeHtml(med.generic);
-      const medDosagePattern = escapeHtml(med.dosagePattern);
       const medMealTiming = escapeHtml(med.mealTiming);
-      const medDuration = escapeHtml(med.duration);
       const medInstruction = escapeHtml(med.instruction);
       const medNotes = escapeHtml(med.notes);
+      const usage = (med.usageType || "DAILY") as string;
 
       const genericText = medGeneric
         ? `<div class="med-generic">(${medGeneric})</div>`
         : "";
-      const patternText = medDosagePattern
-        ? `<span class="med-pattern">${medDosagePattern}</span>`
+
+      const dosageRaw = buildDosage(med);
+      const dosageText = dosageRaw
+        ? `<span class="med-pattern">${escapeHtml(dosageRaw)}</span>`
         : "";
-      const mealText = medMealTiming
-        ? `<span class="med-meal">${medMealTiming.replace(/_/g, " ")}</span>`
+      // Meal timing only applies to oral (STANDARD/DAILY) medicines.
+      const mealText =
+        medMealTiming && usage === "DAILY"
+          ? `<span class="med-meal">${medMealTiming.replace(/_/g, " ")}</span>`
+          : "";
+      const durationRaw = formatDuration(med);
+      const durationText = durationRaw
+        ? `<span class="med-duration">${escapeHtml(durationRaw)}</span>`
         : "";
-      const durationText = `<span class="med-duration">${medDuration}</span>`;
       const instructionText = medInstruction
         ? `<div class="med-instruction">👉 ${medInstruction}</div>`
         : "";
       const notesText = medNotes
         ? `<div class="med-notes">* ${medNotes}</div>`
         : "";
+
+      const details = [dosageText, mealText, durationText]
+        .filter(Boolean)
+        .join(" &mdash; ");
 
       return `
       <div class="medicine-item">
@@ -170,7 +232,7 @@ export const generatePrescriptionHtml = (data: IPdfRenderData): string => {
         </div>
         ${genericText}
         <div class="med-details">
-          ${patternText} ${mealText} &mdash; ${durationText}
+          ${details}
         </div>
         ${instructionText}
         ${notesText}

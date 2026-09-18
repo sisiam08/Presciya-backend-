@@ -23,6 +23,18 @@ const StructuredMedicineSchema = z.object({
     .optional(),
   instruction: z.string().optional(), // e.g. "খাবারের ১০ মিনিট আগে খাবেন"
   notes: z.string().optional(),
+  // Structured instruction fields (Section 13.1)
+  dose: z.string().optional(),
+  frequencyMorning: z.number().int().min(0).optional(),
+  frequencyNoon: z.number().int().min(0).optional(),
+  frequencyNight: z.number().int().min(0).optional(),
+  durationValue: z.number().int().min(0).optional(),
+  durationUnit: z.enum(["day", "week", "month"]).optional(),
+  applicationAmount: z.string().optional(),
+  applicationArea: z.string().optional(),
+  applicationFrequency: z.string().optional(),
+  specificDays: z.string().optional(),
+  customScheduleJson: z.record(z.string(), z.any()).optional(),
 });
 
 const createPrescriptionSchema = z.object({

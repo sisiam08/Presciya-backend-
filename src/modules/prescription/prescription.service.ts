@@ -131,23 +131,9 @@ const createPrescription = async (
     }
 
     // 3. Create relational medicines mapping
-    const medicineRelations = prescriptionData.medicines.map((med: any) => ({
-      prescriptionId: prescription.id,
-      medicineId: med.medicineId || null,
-      snapshotBrandName: med.brandName,
-      snapshotGeneric: med.generic,
-      snapshotStrength: med.strength || null,
-      snapshotType: med.type,
-      usageType: med.usageType || undefined,
-      dosagePattern: med.dosagePattern || null,
-      frequency: med.frequency || null,
-      intervalDays: med.intervalDays || null,
-      duration: med.duration || "Not specified",
-      mealTiming: med.mealTiming || null,
-      instruction: med.instruction || null,
-      notes: med.notes || null,
-      quantity: med.quantity || null,
-    }));
+    const medicineRelations = prescriptionData.medicines.map((med: any) =>
+      mapMedicineRelation(prescription.id, med),
+    );
 
     await tx.prescriptionMedicine.createMany({
       data: medicineRelations,
@@ -276,23 +262,9 @@ const updatePrescription = async (
         where: { prescriptionId: id },
       });
 
-      const medicineRelations = medicines.map((med: any) => ({
-        prescriptionId: id,
-        medicineId: med.medicineId || null,
-        snapshotBrandName: med.brandName,
-        snapshotGeneric: med.generic,
-        snapshotStrength: med.strength || null,
-        snapshotType: med.type,
-        usageType: med.usageType,
-        dosagePattern: med.dosagePattern || null,
-        frequency: med.frequency || null,
-        intervalDays: med.intervalDays || null,
-        duration: med.duration,
-        mealTiming: med.mealTiming || null,
-        instruction: med.instruction || null,
-        notes: med.notes || null,
-        quantity: med.quantity || null,
-      }));
+      const medicineRelations = medicines.map((med: any) =>
+        mapMedicineRelation(id, med),
+      );
 
       await tx.prescriptionMedicine.createMany({
         data: medicineRelations,
@@ -550,6 +522,40 @@ const generateSerial = (workspaceId: string, seq: number): string => {
 // Opaque, non-sequential public verification identifier (Section 15).
 const generateVerificationCode = (): string =>
   crypto.randomBytes(16).toString("base64url");
+
+/**
+ * Maps an incoming medicine payload to a PrescriptionMedicine row. Shared by
+ * create and update so both paths persist the same structured fields
+ * (Section 13.1) — never duplicate this mapping.
+ */
+const mapMedicineRelation = (prescriptionId: string, med: any) => ({
+  prescriptionId,
+  medicineId: med.medicineId || null,
+  snapshotBrandName: med.brandName,
+  snapshotGeneric: med.generic,
+  snapshotStrength: med.strength || null,
+  snapshotType: med.type,
+  usageType: med.usageType || undefined,
+  dosagePattern: med.dosagePattern || null,
+  frequency: med.frequency || null,
+  intervalDays: med.intervalDays ?? null,
+  duration: med.duration || "Not specified",
+  mealTiming: med.mealTiming || null,
+  instruction: med.instruction || null,
+  notes: med.notes || null,
+  quantity: med.quantity ?? null,
+  dose: med.dose || null,
+  frequencyMorning: med.frequencyMorning ?? null,
+  frequencyNoon: med.frequencyNoon ?? null,
+  frequencyNight: med.frequencyNight ?? null,
+  durationValue: med.durationValue ?? null,
+  durationUnit: med.durationUnit || null,
+  applicationAmount: med.applicationAmount || null,
+  applicationArea: med.applicationArea || null,
+  applicationFrequency: med.applicationFrequency || null,
+  specificDays: med.specificDays || null,
+  customScheduleJson: med.customScheduleJson ?? null,
+});
 
 // Finalize a draft prescription (locks it, assigns serial number)
 const finalizePrescription = async (

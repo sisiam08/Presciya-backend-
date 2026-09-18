@@ -823,6 +823,21 @@ model PrescriptionMedicine {
   instruction   String?
   notes         String?
   quantity      Int?
+
+  // Structured instruction fields (Section 13.1) — all optional so existing
+  // dosagePattern/frequency data remains valid.
+  dose            String? // e.g. "1 tablet", "apply once"
+  frequencyMorning Int? // DAILY/STANDARD
+  frequencyNoon    Int?
+  frequencyNight   Int?
+  durationValue    Int? // structured duration (paired with durationUnit)
+  durationUnit     String? // day | week | month
+  applicationAmount String? // TOPICAL
+  applicationArea   String?
+  applicationFrequency String?
+  specificDays      String? // TOPICAL specific days, e.g. "Mon,Thu"
+  customScheduleJson Json? // CUSTOM arbitrary schedules
+
   createdAt     DateTime                @default(now())
   updatedAt     DateTime                @updatedAt
 

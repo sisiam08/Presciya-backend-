@@ -88,6 +88,80 @@ describe("generatePrescriptionHtml — pagination & layout", () => {
   });
 });
 
+describe("generatePrescriptionHtml — instruction types (Section 13.1)", () => {
+  it("STANDARD: renders structured morning/noon/night frequency", () => {
+    const html = generatePrescriptionHtml(
+      baseData({
+        medicines: [
+          {
+            ...medicine(1),
+            usageType: "DAILY",
+            frequencyMorning: 1,
+            frequencyNoon: 0,
+            frequencyNight: 1,
+          },
+        ],
+      }),
+    );
+    expect(html).toContain("1+0+1");
+  });
+
+  it("WEEKLY: renders interval schedule", () => {
+    const html = generatePrescriptionHtml(
+      baseData({
+        medicines: [
+          {
+            ...medicine(1),
+            usageType: "WEEKLY",
+            dose: "Apply once",
+            intervalDays: 7,
+            durationValue: 4,
+            durationUnit: "week",
+          },
+        ],
+      }),
+    );
+    expect(html).toContain("Apply once");
+    expect(html).toContain("every 7 days");
+    expect(html).toContain("4 weeks");
+  });
+
+  it("TOPICAL: renders application amount and area", () => {
+    const html = generatePrescriptionHtml(
+      baseData({
+        medicines: [
+          {
+            ...medicine(1),
+            usageType: "TOPICAL",
+            applicationAmount: "Thin layer",
+            applicationArea: "affected area",
+            applicationFrequency: "twice daily",
+          },
+        ],
+      }),
+    );
+    expect(html).toContain("Thin layer");
+    expect(html).toContain("to affected area");
+    expect(html).toContain("twice daily");
+  });
+
+  it("CUSTOM: renders a structured custom schedule", () => {
+    const html = generatePrescriptionHtml(
+      baseData({
+        medicines: [
+          {
+            ...medicine(1),
+            usageType: "CUSTOM",
+            customScheduleJson: { day1: "1 dose", day2: "1 dose", day3: 0 },
+          },
+        ],
+      }),
+    );
+    expect(html).toContain("day1: 1 dose");
+    expect(html).toContain("day3: 0");
+  });
+});
+
 describe("generatePrescriptionHtml — content", () => {
   it("prints patient identifier, serial and generated timestamp", () => {
     const html = generatePrescriptionHtml(baseData({ medicines: [medicine(1)] }));
