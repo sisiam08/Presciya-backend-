@@ -95,10 +95,32 @@ function globalErrorHandler(
   };
   const errorCode = err.code || codeByStatus[statusCode] || "INTERNAL_ERROR";
 
+  // Log server errors with the request id, but never leak internals to the
+  // client in production (Section 21 / 25.4).
+  if (statusCode >= 500) {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        type: "unhandled",
+        requestId: req.id,
+        method: req.method,
+        path: req.originalUrl?.split("?")[0],
+        message: err?.message,
+        stack: err?.stack,
+        timestamp: new Date().toISOString(),
+      }),
+    );
+
+    if (process.env.NODE_ENV === "production") {
+      errorMessage = "Internal server error";
+    }
+  }
+
   res.status(statusCode).json({
     success: false,
     message: errorMessage,
     code: errorCode,
+    requestId: req.id,
     details: errorDetails,
     // Backward-compatible alias for existing clients
     ...(errorDetails && { errors: errorDetails }),

@@ -6,8 +6,12 @@ import cookieParser from "cookie-parser";
 import { notFound } from "./middleware/notFound";
 import globalErrorHandler from "./middleware/globalErrorHandler";
 import { generalLimiter } from "./middleware/rateLimiter";
+import { requestId, requestLogger } from "./middleware/requestContext";
 
 const app: Application = express();
+
+app.use(requestId);
+app.use(requestLogger);
 
 app.use(helmet());
 app.use(generalLimiter);
