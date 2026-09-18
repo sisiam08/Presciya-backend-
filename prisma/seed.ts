@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import { pathToFileURL } from "url";
 import { prisma } from "../src/lib/prisma";
 import config from "../src/config";
-import { SystemRole } from "../generated/prisma/client";
+import { SystemRole, WorkspaceRole } from "../generated/prisma/client";
 
 /**
  * Platform feature catalog. Each feature gets a global feature flag and can be
@@ -121,6 +121,46 @@ async function seedFeatures() {
   console.log(`Seeded ${FEATURES.length} features and feature flags.`);
 }
 
+/**
+ * Workspace-level permission catalog + role mappings. The workspace member and
+ * invitation routes guard on these keys; without them `hasPermission` throws
+ * "Permission not found" and owners get locked out of member management.
+ */
+const WORKSPACE_PERMISSIONS: { key: string; description: string }[] = [
+  { key: "invite_users", description: "Invite and remove workspace members" },
+  { key: "manage_roles", description: "Change member roles" },
+];
+
+const ROLE_PERMISSION_MAP: Record<string, string[]> = {
+  OWNER: ["invite_users", "manage_roles"],
+  ADMIN: ["invite_users", "manage_roles"],
+};
+
+async function seedPermissions() {
+  for (const permission of WORKSPACE_PERMISSIONS) {
+    const record = await prisma.permission.upsert({
+      where: { key: permission.key },
+      update: { description: permission.description },
+      create: permission,
+    });
+
+    const roles = Object.entries(ROLE_PERMISSION_MAP)
+      .filter(([, keys]) => keys.includes(permission.key))
+      .map(([role]) => role as WorkspaceRole);
+
+    for (const role of roles) {
+      await prisma.rolePermission.upsert({
+        where: {
+          role_permissionId: { role, permissionId: record.id },
+        },
+        update: {},
+        create: { role, permissionId: record.id },
+      });
+    }
+  }
+  console.log(`Seeded ${WORKSPACE_PERMISSIONS.length} workspace permissions.`);
+}
+
 async function seedPlans() {
   for (const variant of VARIANTS) {
     const existing = await prisma.subscriptionVariant.findFirst({
@@ -184,6 +224,7 @@ export async function seed() {
   console.log("Created super admin:", admin.email);
 
   await seedFeatures();
+  await seedPermissions();
   await seedPlans();
 
   console.log("Seed completed successfully!");

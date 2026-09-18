@@ -4,8 +4,10 @@ import { Status } from "../../errors/httpStatus";
 import {
   VerificationStatus,
   VerificationType,
+  WorkspaceRole,
 } from "../../../generated/prisma/enums";
 import { DepartmentServices } from "../department/department.service";
+import { invitationService } from "../invitation/invitation.service";
 
 type InstitutionProfileInput = {
   name?: string;
@@ -344,8 +346,12 @@ const getDepartments = async (workspaceId: string) => {
 
 const assignDoctor = async (
   workspaceId: string,
+  invitedById: string,
   doctorData: {
-    doctorId: string;
+    doctorId?: string;
+    email?: string;
+    name?: string;
+    dummyPassword?: string;
     departmentId?: string;
     chamberIds?: string[];
   },
@@ -360,8 +366,23 @@ const assignDoctor = async (
     throw createAppError("Institution profile not found", Status.NOT_FOUND);
   }
 
+  // Invite-by-email path: works for both existing and brand-new doctors and
+  // never creates a duplicate User (Section 8.1).
+  if (!doctorData.doctorId && doctorData.email) {
+    return await invitationService.inviteUser(
+      workspaceId,
+      doctorData.email,
+      WorkspaceRole.DOCTOR,
+      invitedById,
+      doctorData.name || doctorData.email.split("@")[0] || "Doctor",
+      doctorData.dummyPassword ||
+        `Temp@${Math.random().toString(36).slice(2, 10)}`,
+      doctorData.departmentId || undefined,
+    );
+  }
+
   const doctor = await prisma.doctor.findUnique({
-    where: { id: doctorData.doctorId },
+    where: { id: doctorData.doctorId as string },
   });
 
   if (!doctor) {

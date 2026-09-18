@@ -895,7 +895,17 @@ const amendPrescription = async (
     },
   });
 
-  return revision;
+  // Return the revision with its copied medicine lines and vitals so the
+  // builder can open pre-populated (otherwise saving would wipe them).
+  const fullRevision = await prisma.prescription.findUnique({
+    where: { id: revision.id },
+    include: {
+      prescriptionMedicines: true,
+      clinicalObservations: true,
+    },
+  });
+
+  return fullRevision ?? revision;
 };
 
 export const PrescriptionServices = {

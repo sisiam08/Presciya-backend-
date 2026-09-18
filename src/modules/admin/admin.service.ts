@@ -223,6 +223,24 @@ export const adminService = {  // User management
     };
   },
 
+  // Platform-wide workspace directory (super admin only)
+  async listWorkspaces() {
+    return prisma.workspace.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        owner: { select: { id: true, name: true, email: true } },
+        _count: {
+          select: {
+            memberships: true,
+            patients: true,
+            prescriptions: true,
+            chambers: true,
+          },
+        },
+      },
+    });
+  },
+
   // Medicine catalog management (platform reference data, not workspace-scoped)
   async listMedicines(query: {
     q?: string | undefined;

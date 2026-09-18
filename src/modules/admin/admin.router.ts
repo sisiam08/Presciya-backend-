@@ -159,6 +159,19 @@ router.get(
   },
 );
 
+// Workspace directory (platform-wide)
+router.get(
+  "/workspaces",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await adminService.listWorkspaces();
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // Medicine catalog (platform reference data)
 router.get(
   "/medicines",

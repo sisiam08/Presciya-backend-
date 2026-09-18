@@ -41,11 +41,21 @@ const createDepartmentSchema = z.object({
 });
 
 const assignDoctorSchema = z.object({
-  body: z.object({
-    doctorId: z.string().uuid("Invalid Doctor ID"),
-    departmentId: z.string().uuid("Invalid Department ID").optional(),
-    chamberIds: z.array(z.string().uuid("Invalid Chamber ID")).optional(),
-  }),
+  body: z
+    .object({
+      // Either assign an existing doctor record by id, or invite by email
+      // (existing or new user; never creates a duplicate User).
+      doctorId: z.string().uuid("Invalid Doctor ID").optional(),
+      email: z.string().email("Invalid email address").optional(),
+      name: z.string().min(2).optional(),
+      dummyPassword: z.string().min(8).optional(),
+      departmentId: z.string().optional(),
+      chamberIds: z.array(z.string().uuid("Invalid Chamber ID")).optional(),
+    })
+    .refine((d) => Boolean(d.doctorId || d.email), {
+      message: "Provide a doctorId or an email address",
+      path: ["doctorId"],
+    }),
 });
 
 const updateBrandingSchema = z.object({

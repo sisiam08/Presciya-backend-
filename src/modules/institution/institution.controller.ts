@@ -105,8 +105,10 @@ const getDepartments = catchAsync(
 const assignDoctor = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const workspaceId = (req as any).workspaceId as string;
+    const invitedById = req.user?.id as string;
     const result = await InstitutionServices.assignDoctor(
       workspaceId,
+      invitedById,
       req.body,
     );
 

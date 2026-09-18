@@ -13,6 +13,7 @@ const router = Router();
 router.post(
   "/:workspaceId",
   authWorkspace([
+    WorkspaceRole.OWNER,
     WorkspaceRole.DOCTOR,
     WorkspaceRole.ASSISTANT,
     WorkspaceRole.MANAGER,

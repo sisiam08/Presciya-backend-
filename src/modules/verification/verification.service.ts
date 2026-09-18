@@ -206,7 +206,7 @@ const submitVerificationRequest = async (
  * Get pending verification requests (admin only)
  */
 const getPendingRequests = async (type?: VerificationType) => {
-  return await prisma.verificationRequest.findMany({
+  const requests = await prisma.verificationRequest.findMany({
     where: {
       status: {
         in: [VerificationStatus.PENDING, VerificationStatus.UNDER_REVIEW],
@@ -215,6 +215,19 @@ const getPendingRequests = async (type?: VerificationType) => {
     },
     orderBy: { submittedAt: "asc" },
   });
+
+  // VerificationRequest.userId is a plain column (no Prisma relation), so the
+  // applicant identity is resolved separately for the admin queue.
+  const userIds = [...new Set(requests.map((r) => r.userId))];
+  const users = userIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, name: true, email: true },
+      })
+    : [];
+  const userMap = new Map(users.map((u) => [u.id, u]));
+
+  return requests.map((r) => ({ ...r, user: userMap.get(r.userId) ?? null }));
 };
 
 /**
