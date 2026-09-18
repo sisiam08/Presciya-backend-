@@ -1,0 +1,150 @@
+import { Request, Response } from "express";
+import catchAsync from "../../utils/catchAsync";
+import { PrescriptionServices } from "./prescription.service";
+import sendResponse from "../../utils/sendResponse";
+import { Status } from "../../errors/httpStatus";
+import { requireStringParam } from "../../utils/requestParams";
+import { WorkspaceRole, WorkspaceType } from "../../../generated/prisma/enums";
+
+const createPrescription = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.user?.id as string;
+  const workspaceId = (req as any).workspaceId as string;
+
+  const result = await PrescriptionServices.createPrescription(
+    userId,
+    workspaceId,
+    req.body,
+  );
+
+  sendResponse(res, {
+    statusCode: Status.CREATED,
+    success: true,
+    message: "Prescription generated successfully",
+    data: result,
+  });
+});
+
+const getPrescriptionById = catchAsync(async (req: Request, res: Response) => {
+  const id = requireStringParam(req.params.id, "Prescription ID");
+  const result = await PrescriptionServices.getPrescriptionById(id);
+
+  sendResponse(res, {
+    statusCode: Status.OK,
+    success: true,
+    message: "Prescription details fetched successfully",
+    data: result,
+  });
+});
+
+const updatePrescription = catchAsync(async (req: Request, res: Response) => {
+  const id = requireStringParam(req.params.id, "Prescription ID");
+  const userId = req.user?.id as string;
+  const result = await PrescriptionServices.updatePrescription(
+    id,
+    userId,
+    req.body,
+  );
+
+  sendResponse(res, {
+    statusCode: Status.OK,
+    success: true,
+    message: "Prescription updated successfully",
+    data: result,
+  });
+});
+
+const deletePrescription = catchAsync(async (req: Request, res: Response) => {
+  const id = requireStringParam(req.params.id, "Prescription ID");
+  const userId = req.user?.id as string;
+  await PrescriptionServices.deletePrescription(id, userId);
+
+  sendResponse(res, {
+    statusCode: Status.OK,
+    success: true,
+    message: "Prescription deleted successfully",
+    data: null,
+  });
+});
+
+const getMyPrescriptions = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.user?.id as string;
+  const workspaceType = req.user?.workspaceType as WorkspaceType;
+  const { patientPhone, chamberId, page = 1, limit = 10 } = req.query;
+
+  const result = await PrescriptionServices.getMyPrescriptions(
+    userId,
+    workspaceType,
+    {
+      patientPhone: patientPhone as string,
+      chamberId: chamberId as string,
+    },
+    Number(page),
+    Number(limit),
+  );
+
+  sendResponse(res, {
+    statusCode: Status.OK,
+    success: true,
+    message: "Prescriptions list complete",
+    data: result.prescriptions,
+    meta: result.meta,
+  });
+});
+
+const finalizePrescription = catchAsync(async (req: Request, res: Response) => {
+  const id = requireStringParam(req.params.id, "Prescription ID");
+  const userId = req.user?.id as string;
+  const workspaceId = (req as any).workspaceId as string;
+
+  const result = await PrescriptionServices.finalizePrescription(
+    id,
+    userId,
+    workspaceId,
+  );
+
+  sendResponse(res, {
+    statusCode: Status.OK,
+    success: true,
+    message: "Prescription finalized successfully",
+    data: result,
+  });
+});
+
+const printPrescription = catchAsync(async (req: Request, res: Response) => {
+  const id = requireStringParam(req.params.id, "Prescription ID");
+  const userId = req.user?.id || "anonymous-viewer";
+
+  // Render the A4 print ready HTML template
+  const html = await PrescriptionServices.compileHtmlPrescription(id);
+
+  // Log printing metric
+  const ipAddress = req.ip;
+  const userAgent = req.headers["user-agent"];
+  await PrescriptionServices.logPrint(id, userId, ipAddress, userAgent);
+
+  res.setHeader("Content-Type", "text/html");
+  res.status(Status.OK).send(html);
+});
+
+const verifyPrescription = catchAsync(async (req: Request, res: Response) => {
+  const id = requireStringParam(req.params.id, "Prescription ID");
+  const result = await PrescriptionServices.verifyPrescriptionPublic(id);
+
+  sendResponse(res, {
+    statusCode: Status.OK,
+    success: true,
+    message: "Prescription record is verified as authentic",
+    data: result,
+  });
+});
+
+export const PrescriptionControllers = {
+  createPrescription,
+  getPrescriptionById,
+  updatePrescription,
+  deletePrescription,
+  getMyPrescriptions,
+  finalizePrescription,
+  printPrescription,
+  verifyPrescription,
+};

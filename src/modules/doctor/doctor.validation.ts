@@ -6,8 +6,9 @@ const AssignDoctorSchema = z.object({
   body: z.object({
     name: z.string().min(3, "Name must be at least 3 characters long"),
     email: z.string().email("Invalid email address"),
-    password: z.string().min(8, "Password must be at least 8 characters long"),
-    // password: z.string().regex(config.regex.passwordRegex, "Invalid password"),
+    dummyPassword: z.string().min(8, "Password must be at least 8 characters long"),
+    // dummyPassword: z.string().regex(config.regex.passwordRegex, "Invalid password"),
+    departmentId: z.string(),
   }),
 });
 
@@ -33,10 +34,12 @@ const UpdateDoctorProfileSchema = z.object({
     image: z.string().optional(),
     qualification: z.string().optional(),
     specialization: z.string().optional(),
+    designation: z.string().optional(),
     registrationNo: z
       .string()
       .min(1, "Registration number is required")
-      .regex(/^A-\d{6}$/, "Registration number must be in format A-123456"),
+      .regex(/^A-\d{6}$/, "Registration number must be in format A-123456")
+      .optional(),
     signature: z.string().optional(),
   }),
 });

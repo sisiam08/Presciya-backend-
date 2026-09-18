@@ -1,11 +1,16 @@
-import { UserRole } from "../../generated/prisma/enums";
+import {
+  WorkspaceRole,
+  SystemRole,
+  WorkspaceType,
+} from "../../generated/prisma/enums";
+import { Request } from "express";
 
 export interface ISignUpUserType {
   name: string;
   email: string;
   password: string;
-  role?: UserRole;
-  phone?: string;
+  accountType: "DOCTOR" | "INSTITUTION";
+  OTP: string;
 }
 
 export interface ILogInUserType {
@@ -27,5 +32,17 @@ export interface IAuthorizedUser {
   id: string;
   name: string;
   email: string;
-  role: UserRole;
+  workspaceType: WorkspaceType;
+  systemRole: SystemRole;
+}
+export interface ITokenPayload extends IAuthorizedUser {
+  activeWorkspaceId?: string;
+  workspaceRole?: WorkspaceRole;
+}
+
+export interface AuthenticatedRequest extends Request {
+  user?: ITokenPayload;
+  userId?: string;
+  workspaceId?: string;
+  workspaceRole?: WorkspaceRole;
 }

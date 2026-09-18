@@ -28,6 +28,15 @@ const config = {
     cloudinaryApiKey: process.env.CLOUDEINARY_API_KEY,
     cloudinaryApiSecret: process.env.CLOUDEINARY_API_SECRET,
   },
+  nodemailer: {
+    host: process.env.NODEMAILER_HOST,
+    port: Number(process.env.NODEMAILER_PORT as string) || 587,
+    auth: {
+      user: process.env.APP_USER,
+      pass: process.env.APP_PASSWORD,
+    },
+  },
+  invitationExpiryDays: Number(process.env.INVITATION_EXPIRY_DAYS) || 7,
 };
 
 export default config;

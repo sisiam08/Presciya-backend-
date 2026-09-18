@@ -1,11 +1,16 @@
 import express, { Application, Request, Response } from "express";
 import cors from "cors";
+import helmet from "helmet";
 import router from "./routes";
 import cookieParser from "cookie-parser";
 import { notFound } from "./middleware/notFound";
 import globalErrorHandler from "./middleware/globalErrorHandler";
+import { generalLimiter } from "./middleware/rateLimiter";
 
 const app: Application = express();
+
+app.use(helmet());
+app.use(generalLimiter);
 
 app.use(
   cors({

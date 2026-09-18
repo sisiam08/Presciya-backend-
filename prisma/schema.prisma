@@ -7,12 +7,22 @@ datasource db {
   provider = "postgresql"
 }
 
-enum UserRole {
-  ADMIN
-  MANAGER
-  DOCTOR_PERSONAL
-  DOCTOR_INSTITUTIONAL
+enum SystemRole {
+  USER
+  SUPER_ADMIN
+}
+
+enum WorkspaceType {
+  PERSONAL
   INSTITUTION
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  DOCTOR
+  MANAGER
+  ASSISTANT
 }
 
 enum UserStatus {
@@ -21,9 +31,16 @@ enum UserStatus {
   SUSPENDED
 }
 
-enum DoctorType {
+enum VerificationType {
   PERSONAL
-  INSTITUTIONAL
+  INSTITUTION
+}
+
+enum VerificationStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
 }
 
 enum Gender {
@@ -49,34 +66,293 @@ enum PrescriptionStatus {
   DRAFT
   FINALIZED
   CANCELLED
+  ARCHIVED
 }
 
 enum PaymentStatus {
   PENDING
   PAID
   FAILED
+  REFUNDED
+}
+
+enum MedicineInstructionType {
+  DAILY
+  TOPICAL
+  WEEKLY
+  CUSTOM
+}
+
+enum MealTiming {
+  BEFORE_MEAL
+  AFTER_MEAL
+  WITH_MEAL
+  AFTER_FULL_MEAL
+  EMPTY_STOMACH
+  ANYTIME
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  RUNNING
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum LoginStatus {
+  SUCCESS
+  FAILED
+  SUSPICIOUS
+}
+
+enum AuditActionType {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  PASSWORD_CHANGE
+  VERIFY
+  REJECT
+  ACCEPT
+  ACCEPT_INVITE
+  REJECT_INVITE
+  CANCEL
+  INVITE
+  STATUS_CHANGE
+  SUSPEND
+  RESTORE
+  SUBSCRIPTION_CHANGE
+  PRINT
+  EXPORT
+  DOWNLOAD
+  CHANGE
+  REQUEST
+  OTHER
+}
+
+enum OnboardingState {
+  PROFILE_SETUP
+  VERIFICATION_SUBMITTED
+  VERIFICATION_APPROVED
+  READY
+}
+
+enum AuditEntityType {
+  USER
+  WORKSPACE
+  MEMBERSHIP
+  INVITATION
+  PATIENT
+  PRESCRIPTION
+  CHAMBER
+  APPOINTMENT
+  SUBSCRIPTION
+  PAYMENT
+  INVOICE
+  VERIFICATION
+  SYSTEM
+}
+
+enum PaymentMethod {
+  CARD
+  BANK_TRANSFER
+  MOBILE_BANKING
+  CASH
+  CHEQUE
+  ONLINE_GATEWAY
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum NotificationType {
+  APPOINTMENT
+  PRESCRIPTION
+  PAYMENT
+  SYSTEM
+  USER_ACTION
+  VERIFICATION
+  INVITATION
+  SUBSCRIPTION
+}
+
+enum MembershipStatus {
+  PENDING
+  ACTIVE
+  INACTIVE
+  SUSPENDED
 }
 
 model User {
-  id       String          @id @default(uuid())
+  id String @id @default(uuid())
+
   name     String
-  email    String          @unique
+  email    String  @unique
   password String
-  role     UserRole        @default(DOCTOR_PERSONAL)
-  phone    ContactNumber[]
-  status   UserStatus      @default(ACTIVE)
-  address  String?
-  image     String?
-  slogan   String?
+  phone    String?
+
+  systemRole SystemRole @default(USER)
+
+  avatar String?
+
+  isActive Boolean @default(true)
+
+  isVerified      Boolean   @default(false)
+  emailVerifiedAt DateTime?
+
+  onboardingState OnboardingState @default(PROFILE_SETUP)
+
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  doctorProfile      Doctor?
+  institutionProfile Institution?
+  memberships        Membership[]
+  invitations        Invitation[]
+
+  contactNumbers               ContactNumber[]
+  ownedWorkspaces              Workspace[]
+  prescriptions                Prescription[]
+  subscriptions                Subscription[]
+  loginHistories               LoginHistory[]
+  reviewedVerificationRequests VerificationRequest[]
+  prescriptionPrintLogs        PrescriptionPrintLog[]
+  notifications                Notification[]
+
+  sessions  Session[]
+  auditLogs AuditLog[]
+}
+
+model Doctor {
+  id   String @id @default(uuid())
+  name String
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  bmdcNumber     String?
+  specialization String?
+  qualifications String?
+  designation    String?
+
+  signatureUrl String?
+
+  verificationStatus VerificationStatus @default(PENDING)
+  verificationType   VerificationType   @default(PERSONAL)
+
+  verifiedAt DateTime?
+
+  verifiedById String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  doctor        Doctor?
-  prescriptions Prescription[]
+  patients           Patient[]
+  appointments       Appointment[]
+  institutionDoctors InstitutionDoctor[]
+  favoriteMedicines  DoctorFavoriteMedicine[]
+}
+
+model Institution {
+  id     String @id @default(uuid())
+  name   String
+  userId String @unique
+
+  tradeLicenseNo String?
+  website        String?
+
+  description String?
+
+  // Branding configuration (Section 10.1) — persisted per institution
+  primaryColor    String?
+  secondaryColor  String?
+  fontFamily      String?
+  headerTemplate  String?
+  footerTemplate  String?
+  showLogo        Boolean?
+
+  verificationStatus VerificationStatus @default(PENDING)
+
+  verifiedAt DateTime?
+
+  verifiedById String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions InstitutionSubscription[]
+  departments   Department[]
+  doctors       InstitutionDoctor[]
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("institutions")
+}
+
+model Workspace {
+  id String @id @default(uuid())
+
+  type WorkspaceType
+
+  name String
+  slug String @unique
+
+  logo   String?
+  slogan String?
+
+  email   String?
+  phone   String?
+  address String?
+
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id])
+
+  memberships Membership[]
+
+  invitations   Invitation[]
+  patients      Patient[]
   subscriptions Subscription[]
 
-  @@map("users")
+  chambers       Chamber[]
+  prescriptions  Prescription[]
+  usageTrackings UsageTracking[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  auditLogs AuditLog[]
+
+  @@index([ownerId])
+}
+
+model Membership {
+  id String @id @default(uuid())
+
+  userId      String
+  workspaceId String
+
+  role   WorkspaceRole
+  status MembershipStatus @default(PENDING)
+
+  permissions Json?
+
+  joinedAt DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id])
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([userId, workspaceId])
+  @@index([userId])
+  @@index([workspaceId])
 }
 
 model ContactNumber {
@@ -90,51 +366,72 @@ model ContactNumber {
   user    User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   chamber Chamber? @relation(fields: [chamberId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([chamberId])
   @@map("contact_numbers")
 }
 
-model Doctor {
-  id           String  @id @default(uuid())
-  name         String
-  userId       String  @unique
-  institutionalId String?
+model Invitation {
+  id String @id @default(uuid())
 
-  qualification  String?
-  specialization String?
-  registrationNo String? @unique
-  signature      String?
+  email String
 
-  type DoctorType @default(PERSONAL)
+  workspaceId String
+  role        WorkspaceRole
+
+  departmentId String?
+
+  token String @unique
+
+  invitedById String
+
+  expiresAt DateTime
+
+  acceptedAt DateTime?
+  rejectedAt DateTime?
+
+  workspace  Workspace   @relation(fields: [workspaceId], references: [id])
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  invitedBy  User        @relation(fields: [invitedById], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 
-  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  chambers      Chamber[]
-  patients      Patient[]
-  prescriptions Prescription[]
-
-  @@map("doctors")
+  @@index([workspaceId])
+  @@index([invitedById])
 }
 
 model Chamber {
-  id       String @id @default(uuid())
-  doctorId String
+  id String @id @default(uuid())
 
-  chamberName    String
-  chamberEmail   String?
-  chamberAddress String
-  chamberPhone   ContactNumber[]
-  logo           String?
-  chamberSlogan  String?
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  name String
 
-  doctor        Doctor         @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  phone   String?
+  address String?
+  email   String?
+
+  logo       String?
+  footerText String?
+
+  visitingHours Json?
+
+  // Optional template configuration for print/rendering
+  templateConfig Json?
+
+  isActive Boolean @default(true)
+
+  contactNumbers    ContactNumber[]
+  doctorAssignments DoctorAssignment[]
+  schedules         ChamberSchedule[]
+  appointments      Appointment[]
+
   prescriptions Prescription[]
 
-  @@map("chambers")
+  createdAt DateTime @default(now())
+
+  @@index([workspaceId])
 }
 
 model Medicine {
@@ -147,64 +444,115 @@ model Medicine {
   strength     String?
   manufacturer String?
 
+  // Extensions
+  prescriptionMedicines PrescriptionMedicine[]
+  favoriteMedicines     DoctorFavoriteMedicine[]
+
   @@index([slug])
+  // Typo-tolerant search (Section 12): pg_trgm GIN indexes
+  @@index([brandName(ops: raw("gin_trgm_ops"))], type: Gin, map: "medicine_brand_trgm_idx")
+  @@index([generic(ops: raw("gin_trgm_ops"))], type: Gin, map: "medicine_generic_trgm_idx")
   @@map("medicines")
 }
 
 model Patient {
-  id       String  @id @default(uuid())
-  doctorId String  @default("00000000-0000-0000-0000-000000000000")
-  name     String
-  age      Int
-  gender   Gender
-  weight   Float?
-  phone    String?
-  address  String?
+  id          String  @id @default(uuid())
+  workspaceId String? // NEW: Workspace this patient belongs to
+  doctorId    String  @default("00000000-0000-0000-0000-000000000000")
+  name        String
+  age         Int
+  gender      Gender
+  weight      Float?
+  phone       String?
+  address     String?
+
+  // Extensions
+  bloodGroup       String?
+  allergies        String?
+  chronicDiseases  String?
+  emergencyContact String?
+  patientNotes     String?
+  isDeleted        Boolean   @default(false)
+  deletedAt        DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  workspace     Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   doctor        Doctor         @relation(fields: [doctorId], references: [id], onDelete: SetDefault)
   prescriptions Prescription[]
 
+  // Extensions
+  appointments Appointment[]
+
+  @@index([phone])
+  @@index([workspaceId])
+  @@index([doctorId])
   @@map("patients")
 }
 
 model Prescription {
-  id        String  @id @default(uuid())
-  doctorId  String  @default("00000000-0000-0000-0000-000000000000")
-  patientId String  @default("00000000-0000-0000-0000-000000000000")
-  chamberId String?
-  userId    String?
+  id String @id @default(uuid())
 
+  workspaceId  String
+  chamberId    String
+  doctorUserId String
+
+  patientId String
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  chamber   Chamber   @relation(fields: [chamberId], references: [id])
+
+  doctor  User    @relation(fields: [doctorUserId], references: [id])
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  // Business fields
+  userId        String? // creator / author of the prescription (optional)
+  status        PrescriptionStatus @default(DRAFT)
+  serialNumber  String? // human-readable serial assigned on finalization
   complaints    String?
   diagnosis     String?
-  bloodPressure String?
-  pulse         String?
-  temperature   String?
-
-  medicines     Json
-  dosagePattern String
-  duration      String
-  whenToTake    String
-
   clinicalNotes String?
   advises       String?
-
   nextVisitDate DateTime?
-  pdf           String?
+  pdfUrl        String?
+  isDeleted     Boolean            @default(false)
+  deletedAt     DateTime?
+  updatedAt     DateTime           @updatedAt
 
-  status PrescriptionStatus @default(DRAFT)
+  clinicalObservations  ClinicalObservation[]
+  prescriptionMedicines PrescriptionMedicine[]
+  pdfVersions           PrescriptionPdfVersion[]
+  printLogs             PrescriptionPrintLog[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([serialNumber])
+  @@index([workspaceId])
+  @@index([chamberId])
+  @@index([doctorUserId])
+  @@index([patientId])
+}
+
+model ClinicalObservation {
+  id              String   @id @default(uuid())
+  prescriptionId  String
+  observedAt      DateTime @default(now())
+  bloodPressure   String? // e.g., "120/80"
+  pulse           Int? // beats per minute
+  temperature     Float? // in Celsius
+  weight          Float? // in kg
+  height          String? // e.g., "170 cm"
+  respiratoryRate Int? // breaths per minute
+  notes           String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  doctor  Doctor   @relation(fields: [doctorId], references: [id], onDelete: SetDefault)
-  chamber Chamber? @relation(fields: [chamberId], references: [id], onDelete: SetNull)
-  patient Patient  @relation(fields: [patientId], references: [id], onDelete: SetDefault)
-  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
 
-  @@map("prescriptions")
+  @@index([prescriptionId])
+  @@map("clinical_observations")
 }
 
 model SubscriptionVariant {
@@ -218,14 +566,17 @@ model SubscriptionVariant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  subscriptions Subscription[]
+  subscriptions            Subscription[]
+  planFeatures             PlanFeature[]
+  institutionSubscriptions InstitutionSubscription[]
 
   @@map("subscription_variants")
 }
 
 model Subscription {
   id                    String        @id @default(uuid())
-  userId                String
+  workspaceId           String? // NEW: Link to workspace instead of user
+  userId                String? // DEPRECATED: kept for backward compatibility
   subscriptionVariantId String        @default("00000000-0000-0000-0000-000000000000")
   voucherCode           String?
   startDate             DateTime
@@ -238,11 +589,18 @@ model Subscription {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user                User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace           Workspace?          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user                User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
   subscriptionVariant SubscriptionVariant @relation(fields: [subscriptionVariantId], references: [id], onDelete: SetDefault)
   voucher             Voucher?            @relation(fields: [voucherCode], references: [code], onDelete: SetNull)
   payments            Payment[]
 
+  // Extensions
+  invoices Invoice[]
+
+  @@index([workspaceId])
+  @@index([userId])
+  @@index([subscriptionVariantId])
   @@map("subscriptions")
 }
 
@@ -267,13 +625,421 @@ model Payment {
   subscriptionId String
   amount         Float
   paymentDate    DateTime      @default(now())
-  paymentMethod  String
+  paymentMethod  PaymentMethod @default(CARD) // 3NF: Use enum instead of string
+  transactionId  String? // External payment gateway transaction ID
   status         PaymentStatus @default(PENDING)
+  notes          String? // e.g., transaction ref, error details
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 
+  @@index([subscriptionId])
   @@map("payments")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  refreshToken String   @unique
+  deviceInfo   String?
+  ipAddress    String?
+  lastUsedAt   DateTime @default(now())
+  expiresAt    DateTime
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model OTP {
+  id      String @id @default(uuid())
+  email   String @unique
+  otp     String
+  purpose String @default("signup")
+
+  attempts    Int @default(0)
+  maxAttempts Int @default(5)
+
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([expiresAt])
+  @@map("otps")
+}
+
+model LoginHistory {
+  id            String      @id @default(uuid())
+  userId        String
+  ipAddress     String?
+  userAgent     String?
+  status        LoginStatus @default(SUCCESS)
+  failureReason String?
+  createdAt     DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("login_histories")
+}
+
+model Department {
+  id            String   @id @default(uuid())
+  institutionId String
+  name          String
+  description   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  institution Institution         @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  doctors     InstitutionDoctor[]
+  invitations Invitation[]
+
+  @@index([institutionId])
+  @@map("departments")
+}
+
+model InstitutionDoctor {
+  id            String   @id @default(uuid())
+  institutionId String
+  doctorId      String
+  departmentId  String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  institution Institution        @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  doctor      Doctor             @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  department  Department?        @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  assignments DoctorAssignment[]
+
+  @@unique([institutionId, doctorId])
+  @@index([doctorId])
+  @@map("institution_doctors")
+}
+
+model DoctorAssignment {
+  id                  String   @id @default(uuid())
+  institutionDoctorId String
+  chamberId           String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  institutionDoctor InstitutionDoctor @relation(fields: [institutionDoctorId], references: [id], onDelete: Cascade)
+  chamber           Chamber           @relation(fields: [chamberId], references: [id], onDelete: Cascade)
+
+  @@unique([institutionDoctorId, chamberId])
+  @@index([chamberId])
+  @@map("doctor_assignments")
+}
+
+model VerificationRequest {
+  id String @id @default(uuid())
+
+  userId      String
+  workspaceId String
+
+  type VerificationType
+
+  status VerificationStatus
+
+  submittedData Json
+
+  submittedAt DateTime  @default(now())
+  reviewedAt  DateTime?
+
+  reviewedById String?
+  reviewedBy   User?   @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  rejectionReason String?
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([reviewedById])
+}
+
+model ChamberSchedule {
+  id         String   @id @default(uuid())
+  chamberId  String
+  dayOfWeek  String
+  startTime  String
+  endTime    String
+  maxSerials Int      @default(30)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  chamber Chamber @relation(fields: [chamberId], references: [id], onDelete: Cascade)
+
+  @@index([chamberId])
+  @@map("chamber_schedules")
+}
+
+model Appointment {
+  id              String            @id @default(uuid())
+  chamberId       String
+  doctorId        String
+  patientId       String
+  appointmentDate DateTime
+  serialNo        Int
+  status          AppointmentStatus @default(PENDING) // 3NF: Use enum instead of string
+  cancelReason    String?
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  chamber Chamber @relation(fields: [chamberId], references: [id], onDelete: Cascade)
+  doctor  Doctor  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([chamberId, doctorId, appointmentDate, serialNo])
+  @@index([doctorId])
+  @@index([patientId])
+  @@index([appointmentDate])
+  @@map("appointments")
+}
+
+model PrescriptionMedicine {
+  id                String  @id @default(uuid())
+  prescriptionId    String
+  medicineId        String?
+  snapshotBrandName String?
+  snapshotGeneric   String?
+  snapshotStrength  String?
+  snapshotType      String?
+
+  usageType     MedicineInstructionType @default(DAILY)
+  dosagePattern String?
+  frequency     String?
+  intervalDays  Int?
+  duration      String
+  mealTiming    MealTiming?
+  instruction   String?
+  notes         String?
+  quantity      Int?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  medicine     Medicine?    @relation(fields: [medicineId], references: [id], onDelete: SetNull)
+
+  @@index([prescriptionId])
+  @@index([medicineId])
+  @@map("prescription_medicines")
+}
+
+model PrescriptionPdfVersion {
+  id             String   @id @default(uuid())
+  prescriptionId String
+  version        Int
+  pdfUrl         String
+  createdAt      DateTime @default(now())
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@index([prescriptionId])
+  @@map("prescription_pdf_versions")
+}
+
+model PrescriptionPrintLog {
+  id             String   @id @default(uuid())
+  prescriptionId String
+  userId         String
+  ipAddress      String?
+  userAgent      String?
+  printedAt      DateTime @default(now())
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([prescriptionId])
+  @@index([userId])
+  @@map("prescription_print_logs")
+}
+
+model DoctorFavoriteMedicine {
+  id             String   @id @default(uuid())
+  doctorId       String
+  medicineId     String
+  frequencyCount Int      @default(1)
+  createdAt      DateTime @default(now())
+
+  doctor   Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  medicine Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, medicineId])
+  @@map("doctor_favorite_medicines")
+}
+
+model InstitutionSubscription {
+  id                    String   @id @default(uuid())
+  institutionId         String
+  subscriptionVariantId String
+  startDate             DateTime
+  expiryDate            DateTime
+  price                 Float
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  institution         Institution         @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  subscriptionVariant SubscriptionVariant @relation(fields: [subscriptionVariantId], references: [id], onDelete: Restrict)
+  invoices            Invoice[]
+
+  @@index([institutionId])
+  @@index([subscriptionVariantId])
+  @@map("institution_subscriptions")
+}
+
+model Invoice {
+  id                        String        @id @default(uuid())
+  subscriptionId            String?
+  institutionSubscriptionId String?
+  invoiceNumber             String        @unique
+  amount                    Float
+  status                    InvoiceStatus @default(DRAFT)
+  dueDate                   DateTime?
+  pdfUrl                    String?
+  notes                     String?
+  issuedAt                  DateTime      @default(now())
+  paidAt                    DateTime?
+  createdAt                 DateTime      @default(now())
+  updatedAt                 DateTime      @updatedAt
+
+  subscription            Subscription?            @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  institutionSubscription InstitutionSubscription? @relation(fields: [institutionSubscriptionId], references: [id], onDelete: SetNull)
+
+  @@map("invoices")
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  userId      String
+  title       String
+  message     String
+  type        NotificationType @default(SYSTEM)
+  isRead      Boolean          @default(false)
+  readAt      DateTime?
+  sentStatus  String
+  errorReason String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@map("notifications")
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  key         String           @unique
+  description String?
+  roles       RolePermission[]
+  users       UserPermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  role WorkspaceRole
+
+  permission   Permission @relation(fields: [permissionId], references: [id])
+  permissionId String
+
+  @@id([role, permissionId])
+  @@map("role_permissions")
+}
+
+model UserPermission {
+  userId       String
+  permission   Permission @relation(fields: [permissionId], references: [id])
+  permissionId String
+
+  @@id([userId, permissionId])
+  @@map("user_permissions")
+}
+
+model Feature {
+  id           String        @id @default(uuid())
+  key          String        @unique
+  description  String?
+  category     String?
+  planFeatures PlanFeature[]
+  featureFlags FeatureFlag[]
+
+  @@map("features")
+}
+
+model FeatureFlag {
+  id                String  @id @default(uuid())
+  featureId         String  @unique
+  isEnabledGlobally Boolean @default(true)
+  feature           Feature @relation(fields: [featureId], references: [id])
+
+  @@map("feature_flags")
+}
+
+model PlanFeature {
+  id         String              @id @default(uuid())
+  variantId  String
+  featureId  String
+  limitValue Int?
+  variant    SubscriptionVariant @relation(fields: [variantId], references: [id])
+  feature    Feature             @relation(fields: [featureId], references: [id])
+
+  @@unique([variantId, featureId])
+  @@index([variantId])
+  @@map("plan_features")
+}
+
+model UsageTracking {
+  id          String    @id @default(uuid())
+  workspaceId String
+  featureKey  String
+  used        Int       @default(0)
+  resetAt     DateTime
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, featureKey])
+  @@index([workspaceId])
+  @@map("usage_tracking")
+}
+
+model AuditLog {
+  id String @id @default(uuid())
+
+  userId String?
+
+  workspaceId String?
+
+  actionType AuditActionType
+  entityType AuditEntityType
+
+  entityId String?
+
+  oldValues Json?
+  newValues Json?
+
+  metadata Json?
+
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }

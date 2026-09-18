@@ -1,0 +1,664 @@
+import { prisma } from "../../lib/prisma";
+import { createAppError } from "../../errors/appError";
+import { Status } from "../../errors/httpStatus";
+import {
+  PrescriptionStatus,
+  WorkspaceRole,
+  WorkspaceType,
+  AuditActionType,
+  AuditEntityType,
+} from "../../../generated/prisma/enums";
+import config from "../../config";
+import { AuditService } from "../audit/audit.service";
+import { generatePrescriptionHtml } from "../../utils/pdfGenerator";
+import { FeatureServices } from "../feature/feature.service";
+import { Workspace } from "../../../generated/prisma/client";
+import { checkUserVerification } from "../../utils/verificationCheck";
+
+const createPrescription = async (
+  userId: string,
+  workspaceId: string,
+  prescriptionData: {
+    patientId: string;
+    chamberId: string; // Required
+    complaints?: string;
+    diagnosis?: string;
+    // Vital signs (moved to ClinicalObservation)
+    bloodPressure?: string;
+    pulse?: string;
+    temperature?: string;
+    weight?: number;
+    height?: string;
+    respiratoryRate?: number;
+    clinicalNotes?: string;
+    advises?: string;
+    nextVisitDate?: string;
+    medicines: any[];
+    status?: PrescriptionStatus;
+  },
+) => {
+  // Check if user is verified to perform this action
+  await checkUserVerification(userId);
+
+  // 1. Feature access + usage tracking
+  // (Usage is counted once by the route middleware; validate here without incrementing)
+  await FeatureServices.checkFeatureAccess({
+    featureKey: "create_prescription",
+    userId,
+    workspaceId,
+    period: "daily",
+    incrementBy: 1,
+    trackUsage: false,
+  });
+
+  const doctor = await prisma.doctor.findUnique({
+    where: { userId },
+  });
+
+  if (!doctor) {
+    throw createAppError("Doctor profile not found", Status.NOT_FOUND);
+  }
+
+  const patient = await prisma.patient.findUnique({
+    where: { id: prescriptionData.patientId, isDeleted: false },
+  });
+
+  if (!patient) {
+    throw createAppError("Patient not found", Status.NOT_FOUND);
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    // 2. Create Prescription (without vital signs)
+    const prescription = await tx.prescription.create({
+      data: {
+        doctorUserId: userId,
+        patientId: prescriptionData.patientId,
+        chamberId: prescriptionData.chamberId,
+        workspaceId: workspaceId,
+        userId: userId,
+        complaints: prescriptionData.complaints || null,
+        diagnosis: prescriptionData.diagnosis || null,
+        clinicalNotes: prescriptionData.clinicalNotes || null,
+        advises: prescriptionData.advises || null,
+        nextVisitDate: prescriptionData.nextVisitDate
+          ? new Date(prescriptionData.nextVisitDate)
+          : null,
+        status: prescriptionData.status ?? PrescriptionStatus.DRAFT,
+      },
+    });
+
+    // 2.5 Create Clinical Observation record (3NF: separate table for vitals)
+    if (
+      prescriptionData.bloodPressure ||
+      prescriptionData.pulse ||
+      prescriptionData.temperature ||
+      prescriptionData.weight ||
+      prescriptionData.height ||
+      prescriptionData.respiratoryRate
+    ) {
+      await tx.clinicalObservation.create({
+        data: {
+          prescriptionId: prescription.id,
+          bloodPressure: prescriptionData.bloodPressure || null,
+          pulse: prescriptionData.pulse
+            ? parseInt(prescriptionData.pulse)
+            : null,
+          temperature: prescriptionData.temperature
+            ? parseFloat(prescriptionData.temperature)
+            : null,
+          weight: prescriptionData.weight || null,
+          height: prescriptionData.height || null,
+          respiratoryRate: prescriptionData.respiratoryRate || null,
+        },
+      });
+    }
+
+    // 3. Create relational medicines mapping
+    const medicineRelations = prescriptionData.medicines.map((med: any) => ({
+      prescriptionId: prescription.id,
+      medicineId: med.medicineId || null,
+      snapshotBrandName: med.brandName,
+      snapshotGeneric: med.generic,
+      snapshotStrength: med.strength || null,
+      snapshotType: med.type,
+      usageType: med.usageType || undefined,
+      dosagePattern: med.dosagePattern || null,
+      frequency: med.frequency || null,
+      intervalDays: med.intervalDays || null,
+      duration: med.duration || "Not specified",
+      mealTiming: med.mealTiming || null,
+      instruction: med.instruction || null,
+      notes: med.notes || null,
+      quantity: med.quantity || null,
+    }));
+
+    await tx.prescriptionMedicine.createMany({
+      data: medicineRelations,
+    });
+
+    // 4. Update Medicine Favorites frequency metrics
+    for (const med of prescriptionData.medicines) {
+      if (med.medicineId) {
+        await tx.doctorFavoriteMedicine.upsert({
+          where: {
+            doctorId_medicineId: {
+              doctorId: doctor.id,
+              medicineId: med.medicineId,
+            },
+          },
+          update: {
+            frequencyCount: { increment: 1 },
+          },
+          create: {
+            doctorId: doctor.id,
+            medicineId: med.medicineId,
+            frequencyCount: 1,
+          },
+        });
+      }
+    }
+
+    // Set compiled dynamic print-ready URL
+    const appUrl = config.appUrl || `http://localhost:${config.port}`;
+    const printUrl = `${appUrl}/api/v1/prescription/${prescription.id}/print`;
+
+    const updatedPrescription = await tx.prescription.update({
+      where: { id: prescription.id },
+      data: {
+        pdfUrl: printUrl,
+      },
+    });
+
+    // Log Audit Record
+    await AuditService.logAudit({
+      userId,
+      workspaceId,
+      actionType: AuditActionType.CREATE,
+      entityType: AuditEntityType.PRESCRIPTION,
+      entityId: prescription.id,
+      newValues: {
+        status: updatedPrescription.status,
+        patientId: updatedPrescription.patientId,
+        chamberId: updatedPrescription.chamberId,
+      },
+      metadata: {
+        complaints: updatedPrescription.complaints,
+        diagnosis: updatedPrescription.diagnosis,
+      },
+    });
+
+    return updatedPrescription;
+  });
+};
+
+const getPrescriptionById = async (id: string) => {
+  const prescription = await prisma.prescription.findUnique({
+    where: { id },
+    include: {
+      prescriptionMedicines: true,
+      clinicalObservations: true,
+      doctor: true,
+      chamber: {
+        include: { contactNumbers: true },
+      },
+      patient: true,
+    },
+  });
+
+  if (!prescription) {
+    throw createAppError("Prescription not found", Status.NOT_FOUND);
+  }
+
+  return prescription;
+};
+
+const updatePrescription = async (id: string, userId: string, data: any) => {
+  // Check if user is verified to perform this action
+  await checkUserVerification(userId);
+
+  const prescription = await prisma.prescription.findUnique({
+    where: { id, isDeleted: false },
+  });
+
+  if (!prescription) {
+    throw createAppError("Prescription not found", Status.NOT_FOUND);
+  }
+
+  if (prescription.status === PrescriptionStatus.FINALIZED) {
+    throw createAppError(
+      "Finalized prescriptions cannot be modified",
+      Status.BAD_REQUEST,
+    );
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    const { medicines, ...rest } = data;
+
+    // 1. Update basic parameters
+    const updated = await tx.prescription.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(rest.nextVisitDate && {
+          nextVisitDate: new Date(rest.nextVisitDate),
+        }),
+        ...(medicines && { medicines }), // Update backward compatible JSON
+      },
+    });
+
+    // 2. Refresh relational medicine records if updated
+    if (medicines) {
+      await tx.prescriptionMedicine.deleteMany({
+        where: { prescriptionId: id },
+      });
+
+      const medicineRelations = medicines.map((med: any) => ({
+        prescriptionId: id,
+        medicineId: med.medicineId || null,
+        snapshotBrandName: med.brandName,
+        snapshotGeneric: med.generic,
+        snapshotStrength: med.strength || null,
+        snapshotType: med.type,
+        usageType: med.usageType,
+        dosagePattern: med.dosagePattern || null,
+        frequency: med.frequency || null,
+        intervalDays: med.intervalDays || null,
+        duration: med.duration,
+        mealTiming: med.mealTiming || null,
+        instruction: med.instruction || null,
+        notes: med.notes || null,
+        quantity: med.quantity || null,
+      }));
+
+      await tx.prescriptionMedicine.createMany({
+        data: medicineRelations,
+      });
+    }
+
+    // Log Audit Record
+    await AuditService.logAudit({
+      userId,
+      workspaceId: prescription.workspaceId,
+      actionType: AuditActionType.UPDATE,
+      entityType: AuditEntityType.PRESCRIPTION,
+      entityId: id,
+      oldValues: {
+        status: prescription.status,
+        diagnosis: prescription.diagnosis,
+        complaints: prescription.complaints,
+      },
+      newValues: {
+        status: updated.status,
+        diagnosis: updated.diagnosis,
+        complaints: updated.complaints,
+      },
+      metadata: {
+        patientId: updated.patientId,
+        chamberId: updated.chamberId,
+      },
+    });
+
+    return updated;
+  });
+};
+
+const deletePrescription = async (id: string, userId: string) => {
+  // Check if user is verified to perform this action
+  await checkUserVerification(userId);
+
+  const prescription = await prisma.prescription.findUnique({
+    where: { id, isDeleted: false },
+  });
+
+  if (!prescription) {
+    throw createAppError("Prescription not found", Status.NOT_FOUND);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const deleted = await tx.prescription.update({
+      where: { id },
+      data: {
+        isDeleted: true,
+        deletedAt: new Date(),
+      },
+    });
+
+    // Log Audit Record
+    await AuditService.logAudit({
+      userId,
+      workspaceId: prescription.workspaceId,
+      actionType: AuditActionType.DELETE,
+      entityType: AuditEntityType.PRESCRIPTION,
+      entityId: id,
+      oldValues: {
+        status: prescription.status,
+        isDeleted: prescription.isDeleted,
+      },
+      newValues: {
+        status: deleted.status,
+        isDeleted: deleted.isDeleted,
+        deletedAt: deleted.deletedAt,
+      },
+      metadata: {
+        deletedReason: "Prescription deleted",
+      },
+    });
+  });
+};
+
+const getMyPrescriptions = async (
+  userId: string,
+  workspaceType: WorkspaceType,
+  filters: { patientPhone?: string; chamberId?: string },
+  page: number = 1,
+  limit: number = 10,
+) => {
+  const skip = (page - 1) * limit;
+
+  let query: any = {
+    isDeleted: false,
+  };
+
+  if (workspaceType === WorkspaceType.INSTITUTION) {
+    // For INSTITUTION role, they manage prescriptions through their workspace
+    // This requires workspace context - for now, only show their doctor prescriptions
+    query.doctorUserId = userId;
+  } else {
+    // Doctors only view their own prescriptions
+    const doctor = await prisma.doctor.findUnique({
+      where: { userId },
+    });
+    if (!doctor) {
+      throw createAppError("Doctor profile not found", Status.NOT_FOUND);
+    }
+    query.doctorUserId = userId;
+  }
+
+  // Filter criteria
+  if (filters.chamberId) {
+    query.chamberId = filters.chamberId;
+  }
+  if (filters.patientPhone) {
+    query.patient = { phone: filters.patientPhone };
+  }
+
+  const [prescriptions, total] = await Promise.all([
+    prisma.prescription.findMany({
+      where: query,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+      include: {
+        patient: { select: { name: true, phone: true } },
+        chamber: { select: { name: true } },
+      },
+    }),
+    prisma.prescription.count({ where: query }),
+  ]);
+
+  return {
+    prescriptions,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+};
+
+const compileHtmlPrescription = async (id: string): Promise<string> => {
+  const prescription = await prisma.prescription.findUnique({
+    where: { id },
+    include: {
+      prescriptionMedicines: true,
+      clinicalObservations: true,
+      doctor: true, // This is a User relation
+      chamber: {
+        include: { contactNumbers: true },
+      },
+      patient: true,
+    },
+  });
+
+  if (!prescription) {
+    throw new Error("Prescription not found");
+  }
+
+  // Fetch doctor profile separately since Prescription relates to User, not Doctor
+  const doctorProfile = prescription.doctor
+    ? await prisma.doctor.findUnique({
+        where: { userId: prescription.doctor.id },
+      })
+    : null;
+
+  // Get latest clinical observation for vitals (3NF: from separate table)
+  const latestObservation =
+    prescription.clinicalObservations &&
+    prescription.clinicalObservations.length > 0
+      ? prescription.clinicalObservations[0]
+      : null;
+
+  // Structure render data matching IPdfRenderData interface
+  const renderData = {
+    id: prescription.id,
+    serialNumber: prescription.serialNumber || "",
+    createdAt: prescription.createdAt,
+    status: prescription.status,
+    complaints: prescription.complaints,
+    diagnosis: prescription.diagnosis,
+    // Vitals from ClinicalObservation table
+    bloodPressure: latestObservation
+      ? latestObservation.bloodPressure || null
+      : null,
+    pulse: latestObservation ? latestObservation.pulse || null : null,
+    temperature: latestObservation
+      ? latestObservation.temperature || null
+      : null,
+    weight: latestObservation ? latestObservation.weight || null : null,
+    height: latestObservation ? latestObservation.height || null : null,
+    respiratoryRate: latestObservation
+      ? latestObservation.respiratoryRate || null
+      : null,
+    clinicalNotes: prescription.clinicalNotes,
+    advises: prescription.advises,
+    nextVisitDate: prescription.nextVisitDate,
+    medicines: prescription.prescriptionMedicines,
+    doctor: {
+      name: prescription.doctor?.name || "",
+      qualification: doctorProfile?.qualifications || "",
+      specialization: doctorProfile?.specialization || "",
+      registrationNo: doctorProfile?.bmdcNumber || "",
+      signature: doctorProfile?.signatureUrl || "",
+    },
+    chamber: prescription.chamber
+      ? {
+          chamberName: prescription.chamber.name,
+          chamberAddress: prescription.chamber.address || "",
+          chamberEmail: prescription.chamber.email,
+          logo: prescription.chamber.logo,
+          chamberSlogan: prescription.chamber.footerText,
+          templateConfig: prescription.chamber.templateConfig,
+          chamberPhone:
+            prescription.chamber.contactNumbers?.map((cn) => cn.phone) || [],
+        }
+      : null,
+    patient: {
+      name: prescription.patient.name,
+      age: prescription.patient.age,
+      gender: prescription.patient.gender,
+      phone: prescription.patient.phone,
+      bloodGroup: prescription.patient.bloodGroup,
+      allergies: prescription.patient.allergies,
+      chronicDiseases: prescription.patient.chronicDiseases,
+    },
+  };
+
+  return generatePrescriptionHtml(renderData);
+};
+
+const generateSerial = (workspaceId: string, seq: number): string => {
+  const prefix = workspaceId.slice(0, 4).toUpperCase();
+  return `PRS-${prefix}-${String(seq).padStart(6, "0")}`;
+};
+
+// Finalize a draft prescription (locks it, assigns serial number)
+const finalizePrescription = async (
+  prescriptionId: string,
+  userId: string,
+  workspaceId: string,
+) => {
+  const existing = await prisma.prescription.findUnique({
+    where: { id: prescriptionId, isDeleted: false },
+    select: { id: true, workspaceId: true, status: true, chamberId: true },
+  });
+
+  if (!existing) {
+    throw createAppError("Prescription not found", Status.NOT_FOUND);
+  }
+
+  if (existing.workspaceId !== workspaceId) {
+    throw createAppError(
+      "You do not have permission to finalize this prescription",
+      Status.FORBIDDEN,
+    );
+  }
+
+  if (existing.status === PrescriptionStatus.FINALIZED) {
+    throw createAppError(
+      "Prescription is already finalized and locked",
+      Status.BAD_REQUEST,
+    );
+  }
+
+  if (existing.status !== PrescriptionStatus.DRAFT) {
+    throw createAppError(
+      "Only draft prescriptions can be finalized",
+      Status.BAD_REQUEST,
+    );
+  }
+
+  // Assign serial number (unique). Retry on the rare concurrent-collision case.
+  let prescription: any = null;
+  for (let attempt = 0; attempt < 3 && !prescription; attempt++) {
+    try {
+      prescription = await prisma.$transaction(async (tx) => {
+        const finalizedCount = await tx.prescription.count({
+          where: { workspaceId, status: PrescriptionStatus.FINALIZED },
+        });
+
+        const serialNumber = generateSerial(
+          workspaceId,
+          finalizedCount + 1 + attempt,
+        );
+
+        return tx.prescription.update({
+          where: { id: prescriptionId },
+          data: {
+            status: PrescriptionStatus.FINALIZED,
+            serialNumber,
+          },
+          include: {
+            patient: { select: { name: true, phone: true } },
+            chamber: { select: { name: true } },
+          },
+        });
+      });
+    } catch (err) {
+      const prismaErr = err as { code?: string };
+      if (prismaErr.code !== "P2002") throw err;
+    }
+  }
+
+  if (!prescription) {
+    throw createAppError(
+      "Failed to finalize prescription. Please try again.",
+      Status.INTERNAL_SERVER_ERROR,
+    );
+  }
+
+  // Audit: Log finalization
+  await AuditService.logAudit({
+    userId,
+    workspaceId,
+    actionType: AuditActionType.STATUS_CHANGE,
+    entityType: AuditEntityType.PRESCRIPTION,
+    entityId: prescriptionId,
+    oldValues: { status: PrescriptionStatus.DRAFT },
+    newValues: {
+      status: PrescriptionStatus.FINALIZED,
+      serialNumber: prescription.serialNumber,
+    },
+    metadata: {
+      patientName: prescription.patient?.name,
+      chamberName: prescription.chamber?.name,
+    },
+  });
+
+  return prescription;
+};
+
+const logPrint = async (
+  prescriptionId: string,
+  userId: string,
+  ipAddress?: string,
+  userAgent?: string,
+) => {
+  await prisma.prescriptionPrintLog.create({
+    data: {
+      prescriptionId,
+      userId,
+      ipAddress: ipAddress ?? null,
+      userAgent: userAgent ?? null,
+    },
+  });
+};
+
+const verifyPrescriptionPublic = async (id: string) => {
+  const prescription = await prisma.prescription.findUnique({
+    where: { id, isDeleted: false, status: PrescriptionStatus.FINALIZED },
+    select: {
+      id: true,
+      status: true,
+      serialNumber: true,
+      createdAt: true,
+      nextVisitDate: true,
+      doctor: { select: { id: true, name: true, bmdcNumber: true } },
+      chamber: { select: { id: true, name: true } },
+      patient: { select: { name: true } },
+    },
+  });
+
+  if (!prescription) {
+    throw createAppError(
+      "No authentic finalized prescription found with this ID.",
+      Status.NOT_FOUND,
+    );
+  }
+
+  // Public endpoint: return only the minimum verification info.
+  // Never expose patient contact/clinical data or medicine details.
+  return {
+    verified: true,
+    prescriptionId: prescription.id,
+    serialNumber: prescription.serialNumber ?? null,
+    issuedAt: prescription.createdAt,
+    nextVisitDate: prescription.nextVisitDate,
+    doctorName: prescription.doctor?.name ?? "",
+    bmdcNumber: prescription.doctor?.bmdcNumber ?? null,
+    chamberName: prescription.chamber?.name ?? null,
+    patientName: prescription.patient?.name ?? null,
+  };
+};
+
+export const PrescriptionServices = {
+  createPrescription,
+  getPrescriptionById,
+  updatePrescription,
+  deletePrescription,
+  getMyPrescriptions,
+  finalizePrescription,
+  compileHtmlPrescription,
+  logPrint,
+  verifyPrescriptionPublic,
+};

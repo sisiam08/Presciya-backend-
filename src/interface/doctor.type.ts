@@ -3,16 +3,19 @@ import { IContactType } from "./contact.type";
 export interface IUpdateDoctorProfile {
   name?: string;
   phone?: IContactType[];
-  image: string;
+  image?: string;
   qualification?: string;
   specialization?: string;
-  registrationNo: string;
+  designation?: string;
+  registrationNo?: string;
   signature?: string;
+  signatureUrl?: string;
 }
 
 export interface IAssignDoctor {
   name: string;
   email: string;
-  password: string;
+  dummyPassword: string;
   institutionalId: string;
+  departmentId: string;
 }

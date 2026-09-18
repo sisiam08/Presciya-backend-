@@ -1,3 +1,5 @@
+import { SystemRole, WorkspaceRole, WorkspaceType } from "../../generated/prisma/enums";
+
 declare global {
   namespace Express {
     interface Request {
@@ -5,7 +7,10 @@ declare global {
         id: string;
         name: string;
         email: string;
-        role: string;
+        systemRole: SystemRole;
+        workspaceId?: string;
+        workspaceType?: WorkspaceType;
+        workspaceRole?: WorkspaceRole;
       };
     }
   }

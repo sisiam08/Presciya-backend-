@@ -3,3 +3,10 @@ node_modules
 .env
 
 /generated/prisma
+
+# Build output
+/api
+/dist
+
+# Logs
+*.log

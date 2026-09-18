@@ -7,18 +7,26 @@ import { createAppError } from "../../errors/appError";
 import { IUpdateDoctorProfile } from "../../interface";
 import sharp from "sharp";
 import { uploadFileToCloudinary } from "../../config/cloudinary.config";
+import { AuthenticatedRequest } from "../../middleware/auth";
 
-const assignDoctor = catchAsync(async (req: Request, res: Response) => {
-  const institutionalId = req.user?.id!;
-  const doctorData = { ...req.body, institutionalId };
-  const data = await DoctorServices.assignDoctor(doctorData);
-  sendResponse(res, {
-    statusCode: Status.CREATED,
-    success: true,
-    message: "Doctor assigned successfully",
-    data,
-  });
-});
+const assignDoctor = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const invitedById = req.user?.id!;
+    const workspaceId = req.workspaceId!;
+    const doctorData = req.body;
+    const data = await DoctorServices.assignDoctor(
+      doctorData,
+      workspaceId,
+      invitedById,
+    );
+    sendResponse(res, {
+      statusCode: Status.CREATED,
+      success: true,
+      message: "Invitation sent successfully",
+      data,
+    });
+  },
+);
 
 const getDoctorProfile = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.id!;
@@ -53,8 +61,8 @@ const getAllDoctors = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getMyDoctors = catchAsync(async (req: Request, res: Response) => {
-  const institutionalId = req.user?.id!;
-  const data = await DoctorServices.getMyDoctors(institutionalId);
+  const workspaceId = (req as any).workspaceId;
+  const data = await DoctorServices.getMyDoctors(workspaceId);
   sendResponse(res, {
     statusCode: Status.OK,
     success: true,
@@ -81,7 +89,7 @@ const updateDoctorProfile = catchAsync(async (req: Request, res: Response) => {
           buffer,
           signatureFile.originalname.replace(/\.[^.]+$/, ".webp"),
         );
-        doctorUpdateData.signature = result.secure_url;
+        doctorUpdateData.signatureUrl = result.secure_url;
       })(),
     );
   }

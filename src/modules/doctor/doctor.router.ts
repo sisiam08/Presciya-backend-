@@ -2,47 +2,52 @@ import { Router } from "express";
 import { DoctorControllers } from "./doctor.controller";
 import { DoctorValidation } from "./doctor.validation";
 import validateRequest from "../../middleware/validateRequest";
-import { auth_middleware } from "../../middleware/auth";
-import { UserRole } from "../../../generated/prisma/enums";
+import { authWorkspace, authOnly } from "../../middleware/auth";
+import { WorkspaceRole } from "../../../generated/prisma/enums";
 import { upload } from "../../config/multer.config";
 
 const router = Router();
 
+// Assign doctor to workspace (OWNER only)
 router.post(
   "/",
-  auth_middleware([UserRole.INSTITUTION]),
+  authWorkspace([WorkspaceRole.OWNER]) as any,
   validateRequest(DoctorValidation.AssignDoctorSchema),
   DoctorControllers.assignDoctor,
 );
 
-router.get(
-  "/profile",
-  auth_middleware([UserRole.DOCTOR_PERSONAL, UserRole.DOCTOR_INSTITUTIONAL]),
-  DoctorControllers.getDoctorProfile,
-);
+// Get own doctor profile (any authenticated user)
+router.get("/profile", authOnly(), DoctorControllers.getDoctorProfile);
 
+// Get workspace doctors (OWNER only)
 router.get(
   "/my-doctors",
-  auth_middleware([UserRole.INSTITUTION]),
+  authWorkspace([WorkspaceRole.OWNER]) as any,
   DoctorControllers.getMyDoctors,
 );
 
+// Get all doctors (requires OWNER - platform level)
 router.get(
   "/",
-  auth_middleware([UserRole.ADMIN]),
+  authWorkspace([WorkspaceRole.OWNER]) as any,
   DoctorControllers.getAllDoctors,
 );
 
+// Get doctor by ID (OWNER/DOCTOR in same workspace)
 router.get(
   "/:id",
-  auth_middleware([UserRole.ADMIN, UserRole.INSTITUTION]),
+  authWorkspace([WorkspaceRole.OWNER, WorkspaceRole.DOCTOR]) as any,
   DoctorControllers.getDoctorProfileById,
 );
 
+// Update own doctor profile (any authenticated user)
 router.patch(
   "/profile",
-  auth_middleware([UserRole.DOCTOR_PERSONAL, UserRole.DOCTOR_INSTITUTIONAL]),
-  upload.fields([{ name: "signature", maxCount: 1 }, { name: "image", maxCount: 1 }]),
+  authOnly(),
+  upload.fields([
+    { name: "signature", maxCount: 1 },
+    { name: "image", maxCount: 1 },
+  ]),
   validateRequest(DoctorValidation.UpdateDoctorProfileSchema),
   DoctorControllers.updateDoctorProfile,
 );
