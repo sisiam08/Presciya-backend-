@@ -243,19 +243,31 @@ const updatePrescription = async (
     );
   }
 
-  return await prisma.$transaction(async (tx) => {
-    const { medicines, ...rest } = data;
+  // Finalization must go through finalizePrescription so the verification
+  // gate, serial number and verification code are always applied (Section 13.3).
+  if (data?.status === PrescriptionStatus.FINALIZED) {
+    throw createAppError(
+      "Use the finalize endpoint to finalize a prescription.",
+      Status.BAD_REQUEST,
+      true,
+      "INVALID_STATE",
+    );
+  }
 
-    // 1. Update basic parameters
+  return await prisma.$transaction(async (tx) => {
+    const { medicines, status, ...rest } = data;
+
+    // 1. Update basic parameters (never pass `medicines` to the Prescription
+    //    model — medicine lines live in PrescriptionMedicine).
+    const updateData: Record<string, unknown> = { ...rest };
+    if (status !== undefined) updateData.status = status;
+    if (rest.nextVisitDate) {
+      updateData.nextVisitDate = new Date(rest.nextVisitDate);
+    }
+
     const updated = await tx.prescription.update({
       where: { id },
-      data: {
-        ...rest,
-        ...(rest.nextVisitDate && {
-          nextVisitDate: new Date(rest.nextVisitDate),
-        }),
-        ...(medicines && { medicines }), // Update backward compatible JSON
-      },
+      data: updateData,
     });
 
     // 2. Refresh relational medicine records if updated
