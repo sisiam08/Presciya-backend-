@@ -13,33 +13,42 @@ import { AuthenticatedRequest } from "../../middleware/auth";
  */
 export const submitVerificationRequest = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { type, submittedData, workspaceId } = req.body;
+    const { type, submittedData, workspaceId: bodyWorkspaceId } = req.body;
     const userId = req.user?.id;
 
     if (!userId) {
       throw createAppError("User not authenticated", Status.UNAUTHORIZED);
     }
 
-    if (!type || !Object.values(VerificationType).includes(type)) {
-      throw createAppError("Invalid verification type", Status.BAD_REQUEST);
-    }
+    // Accept the legacy "DOCTOR" label as an alias for PERSONAL.
+    const normalizedType =
+      type === "DOCTOR" ? VerificationType.PERSONAL : type;
 
-    if (!submittedData || typeof submittedData !== "object") {
+    if (
+      !normalizedType ||
+      !Object.values(VerificationType).includes(normalizedType)
+    ) {
       throw createAppError(
-        "submittedData is required and must be an object",
+        "Invalid verification type. Expected PERSONAL or INSTITUTION.",
         Status.BAD_REQUEST,
       );
     }
+
+    // Default the workspace to the caller's active workspace when omitted.
+    const workspaceId = bodyWorkspaceId || req.user?.activeWorkspaceId;
 
     if (!workspaceId) {
       throw createAppError("workspaceId is required", Status.BAD_REQUEST);
     }
 
+    const data =
+      submittedData && typeof submittedData === "object" ? submittedData : {};
+
     const result = await VerificationServices.submitVerificationRequest(
       userId,
-      type,
+      normalizedType,
       workspaceId,
-      submittedData,
+      data,
     );
 
     sendResponse(res, {

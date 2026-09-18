@@ -38,7 +38,8 @@ const UpdateDoctorProfileSchema = z.object({
     registrationNo: z
       .string()
       .min(1, "Registration number is required")
-      .regex(/^A-\d{6}$/, "Registration number must be in format A-123456")
+      // BMDC numbers vary in length; accept an optional dash and 4-7 digits.
+      .regex(/^A-?\d{4,7}$/i, "Registration number must be like A-123456")
       .optional(),
     signature: z.string().optional(),
   }),

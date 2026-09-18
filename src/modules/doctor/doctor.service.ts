@@ -197,8 +197,9 @@ const updateDoctorProfile = async (
   userId: string,
   workspaceId?: string,
 ) => {
-  // Check if user is verified to perform this action
-  await checkUserVerification(userId);
+  // Profile completion is allowed before professional verification (Section
+  // 7.4): a pending doctor must be able to fill in their BMDC/qualifications
+  // and signature in order to submit for verification.
 
   const { signatureUrl, registrationNo, qualification, designation } = data;
 
