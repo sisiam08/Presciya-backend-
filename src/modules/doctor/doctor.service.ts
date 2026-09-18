@@ -1,5 +1,7 @@
 import { IAssignDoctor, IUpdateDoctorProfile } from "../../interface";
 import { prisma } from "../../lib/prisma";
+import { createAppError } from "../../errors/appError";
+import { Status } from "../../errors/httpStatus";
 import {
   VerificationStatus,
   WorkspaceType,
@@ -115,16 +117,42 @@ const getDoctorProfile = async (userId: string) => {
   });
 };
 
-const getDoctorProfileById = async (doctorId: string) => {
-  return await prisma.doctor.findUnique({
-    where: {
-      id: doctorId,
-    },
+const getDoctorProfileById = async (doctorId: string, workspaceId: string) => {
+  const doctor = await prisma.doctor.findUnique({
+    where: { id: doctorId },
   });
+
+  if (!doctor) {
+    throw createAppError("Doctor not found", Status.NOT_FOUND);
+  }
+
+  // BOLA/IDOR: only expose a doctor who is a member of the caller's workspace.
+  const membership = await prisma.membership.findUnique({
+    where: {
+      userId_workspaceId: { userId: doctor.userId, workspaceId },
+    },
+    select: { id: true },
+  });
+
+  if (!membership) {
+    throw createAppError("Doctor not found", Status.NOT_FOUND);
+  }
+
+  return doctor;
 };
 
-const getAllDoctors = async () => {
-  return await prisma.doctor.findMany();
+const getAllDoctors = async (workspaceId: string) => {
+  // Scoped to doctors who are active members of the active workspace, never
+  // the whole platform (Section 6.4).
+  return await prisma.doctor.findMany({
+    where: {
+      user: {
+        memberships: {
+          some: { workspaceId, status: MembershipStatus.ACTIVE },
+        },
+      },
+    },
+  });
 };
 
 const getMyDoctors = async (workspaceId: string) => {
@@ -206,6 +234,14 @@ const updateDoctorProfile = async (
       where: { userId },
       data: doctorFields,
     });
+
+    // Persist an uploaded profile image on the User record (avatar).
+    if ((data as any).image) {
+      await tx.user.update({
+        where: { id: userId },
+        data: { avatar: (data as any).image },
+      });
+    }
 
     return updatedDoctor;
   });

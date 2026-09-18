@@ -41,7 +41,11 @@ const getDoctorProfile = catchAsync(async (req: Request, res: Response) => {
 
 const getDoctorProfileById = catchAsync(async (req: Request, res: Response) => {
   const doctorId = req.params.id;
-  const data = await DoctorServices.getDoctorProfileById(doctorId as string);
+  const workspaceId = (req as any).workspaceId as string;
+  const data = await DoctorServices.getDoctorProfileById(
+    doctorId as string,
+    workspaceId,
+  );
   sendResponse(res, {
     statusCode: Status.OK,
     success: true,
@@ -51,11 +55,12 @@ const getDoctorProfileById = catchAsync(async (req: Request, res: Response) => {
 });
 
 const getAllDoctors = catchAsync(async (req: Request, res: Response) => {
-  const data = await DoctorServices.getAllDoctors();
+  const workspaceId = (req as any).workspaceId as string;
+  const data = await DoctorServices.getAllDoctors(workspaceId);
   sendResponse(res, {
     statusCode: Status.OK,
     success: true,
-    message: "All doctors retrieved successfully",
+    message: "Workspace doctors retrieved successfully",
     data,
   });
 });
