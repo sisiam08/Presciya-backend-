@@ -134,6 +134,25 @@ const printPrescription = catchAsync(async (req: Request, res: Response) => {
   res.status(Status.OK).send(html);
 });
 
+const amendPrescription = catchAsync(async (req: Request, res: Response) => {
+  const id = requireStringParam(req.params.id, "Prescription ID");
+  const userId = req.user?.id as string;
+  const workspaceId = (req as any).workspaceId as string;
+
+  const result = await PrescriptionServices.amendPrescription(
+    id,
+    userId,
+    workspaceId,
+  );
+
+  sendResponse(res, {
+    statusCode: Status.CREATED,
+    success: true,
+    message: "A corrected draft version was created",
+    data: result,
+  });
+});
+
 const previewPrescription = catchAsync(async (req: Request, res: Response) => {
   const id = requireStringParam(req.params.id, "Prescription ID");
   const workspaceId = (req as any).workspaceId as string;
@@ -164,6 +183,7 @@ export const PrescriptionControllers = {
   deletePrescription,
   getMyPrescriptions,
   finalizePrescription,
+  amendPrescription,
   printPrescription,
   previewPrescription,
   verifyPrescription,

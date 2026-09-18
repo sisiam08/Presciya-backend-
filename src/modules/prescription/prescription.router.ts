@@ -86,6 +86,15 @@ router.post(
   PrescriptionControllers.finalizePrescription,
 );
 
+// Amend a finalized prescription by creating a corrected draft version
+router.post(
+  "/:id/amend",
+  authWorkspace([WorkspaceRole.DOCTOR, WorkspaceRole.OWNER], {
+    resource: "prescription",
+  }) as any,
+  PrescriptionControllers.amendPrescription,
+);
+
 // Delete prescription (prescription owner or OWNER)
 router.delete(
   "/:id",

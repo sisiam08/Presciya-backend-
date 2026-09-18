@@ -511,6 +511,13 @@ model Prescription {
   status        PrescriptionStatus @default(DRAFT)
   serialNumber  String? // human-readable serial assigned on finalization
   verificationCode String? @unique // opaque, public-facing verification identifier (Section 15)
+
+  // Correction/versioning (Section 13.4): a finalized prescription is never
+  // mutated; corrections create a new draft that supersedes it.
+  version      Int            @default(1)
+  supersedesId String?
+  supersedes   Prescription?  @relation("PrescriptionVersions", fields: [supersedesId], references: [id], onDelete: SetNull)
+  revisions    Prescription[] @relation("PrescriptionVersions")
   complaints    String?
   diagnosis     String?
   clinicalNotes String?
@@ -533,6 +540,7 @@ model Prescription {
   @@index([chamberId])
   @@index([doctorUserId])
   @@index([patientId])
+  @@index([supersedesId])
 }
 
 model ClinicalObservation {

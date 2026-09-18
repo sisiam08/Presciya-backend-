@@ -236,8 +236,10 @@ const updatePrescription = async (
 
   if (prescription.status === PrescriptionStatus.FINALIZED) {
     throw createAppError(
-      "Finalized prescriptions cannot be modified",
+      "Finalized prescriptions cannot be modified. Create a corrected version instead.",
       Status.BAD_REQUEST,
+      true,
+      "INVALID_STATE",
     );
   }
 
@@ -754,6 +756,132 @@ const previewPrescription = async (id: string, workspaceId: string) => {
   return compileHtmlPrescription(id, { requireFinalized: false });
 };
 
+/**
+ * Correction after finalization (Section 13.4). The original finalized record
+ * is never mutated — a new DRAFT version is created that supersedes it. The
+ * original remains intact and auditable.
+ */
+const amendPrescription = async (
+  prescriptionId: string,
+  userId: string,
+  workspaceId: string,
+) => {
+  await checkUserVerification(userId);
+
+  const original = await prisma.prescription.findFirst({
+    where: { id: prescriptionId, workspaceId, isDeleted: false },
+    include: {
+      prescriptionMedicines: true,
+      clinicalObservations: true,
+    },
+  });
+
+  if (!original) {
+    throw createAppError("Prescription not found", Status.NOT_FOUND);
+  }
+
+  if (original.status !== PrescriptionStatus.FINALIZED) {
+    throw createAppError(
+      "Only finalized prescriptions can be amended. Edit the draft instead.",
+      Status.BAD_REQUEST,
+      true,
+      "INVALID_STATE",
+    );
+  }
+
+  const revision = await prisma.$transaction(async (tx) => {
+    const created = await tx.prescription.create({
+      data: {
+        workspaceId: original.workspaceId,
+        chamberId: original.chamberId,
+        doctorUserId: original.doctorUserId,
+        patientId: original.patientId,
+        userId: original.userId ?? userId,
+        status: PrescriptionStatus.DRAFT,
+        complaints: original.complaints,
+        diagnosis: original.diagnosis,
+        clinicalNotes: original.clinicalNotes,
+        advises: original.advises,
+        nextVisitDate: original.nextVisitDate,
+        version: original.version + 1,
+        supersedesId: original.id,
+      },
+    });
+
+    const observation = original.clinicalObservations[0];
+    if (observation) {
+      await tx.clinicalObservation.create({
+        data: {
+          prescriptionId: created.id,
+          bloodPressure: observation.bloodPressure,
+          pulse: observation.pulse,
+          temperature: observation.temperature,
+          weight: observation.weight,
+          height: observation.height,
+          respiratoryRate: observation.respiratoryRate,
+          notes: observation.notes,
+        },
+      });
+    }
+
+    if (original.prescriptionMedicines.length > 0) {
+      await tx.prescriptionMedicine.createMany({
+        data: original.prescriptionMedicines.map((m) => ({
+          prescriptionId: created.id,
+          medicineId: m.medicineId,
+          snapshotBrandName: m.snapshotBrandName,
+          snapshotGeneric: m.snapshotGeneric,
+          snapshotStrength: m.snapshotStrength,
+          snapshotType: m.snapshotType,
+          usageType: m.usageType,
+          dosagePattern: m.dosagePattern,
+          frequency: m.frequency,
+          intervalDays: m.intervalDays,
+          duration: m.duration,
+          mealTiming: m.mealTiming,
+          instruction: m.instruction,
+          notes: m.notes,
+          quantity: m.quantity,
+          dose: m.dose,
+          frequencyMorning: m.frequencyMorning,
+          frequencyNoon: m.frequencyNoon,
+          frequencyNight: m.frequencyNight,
+          durationValue: m.durationValue,
+          durationUnit: m.durationUnit,
+          applicationAmount: m.applicationAmount,
+          applicationArea: m.applicationArea,
+          applicationFrequency: m.applicationFrequency,
+          specificDays: m.specificDays,
+          ...(m.customScheduleJson !== null
+            ? { customScheduleJson: m.customScheduleJson as any }
+            : {}),
+        })),
+      });
+    }
+
+    return created;
+  });
+
+  await AuditService.logAudit({
+    userId,
+    workspaceId,
+    actionType: AuditActionType.CREATE,
+    entityType: AuditEntityType.PRESCRIPTION,
+    entityId: revision.id,
+    newValues: {
+      status: PrescriptionStatus.DRAFT,
+      version: revision.version,
+      supersedesId: original.id,
+    },
+    metadata: {
+      amendedFrom: original.id,
+      patientId: original.patientId,
+    },
+  });
+
+  return revision;
+};
+
 export const PrescriptionServices = {
   createPrescription,
   getPrescriptionById,
@@ -763,6 +891,7 @@ export const PrescriptionServices = {
   finalizePrescription,
   compileHtmlPrescription,
   previewPrescription,
+  amendPrescription,
   logPrint,
   verifyPrescriptionPublic,
 };
