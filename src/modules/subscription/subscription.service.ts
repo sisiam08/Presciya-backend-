@@ -171,6 +171,8 @@ const checkLimit = async (params: {
     throw createAppError(
       "Feature is not included in the current plan",
       Status.PAYMENT_REQUIRED,
+      true,
+      "SUBSCRIPTION_REQUIRED",
     );
   }
 
@@ -208,6 +210,8 @@ const checkLimit = async (params: {
     throw createAppError(
       `Feature limit exceeded (${usage.used}/${limitValue}). Please upgrade your plan.`,
       Status.PAYMENT_REQUIRED,
+      true,
+      "QUOTA_EXCEEDED",
     );
   }
 

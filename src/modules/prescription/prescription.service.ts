@@ -43,13 +43,14 @@ const createPrescription = async (
   await checkUserVerification(userId);
 
   // 1. Feature access + usage tracking
-  // (Usage is counted once by the route middleware; validate here without incrementing)
+  // Usage is consumed exactly once by the route middleware; re-validate here
+  // without incrementing (incrementBy: 0) so we never double-count.
   await FeatureServices.checkFeatureAccess({
     featureKey: "create_prescription",
     userId,
     workspaceId,
     period: "daily",
-    incrementBy: 1,
+    incrementBy: 0,
     trackUsage: false,
   });
 

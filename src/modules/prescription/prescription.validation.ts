@@ -28,7 +28,7 @@ const StructuredMedicineSchema = z.object({
 const createPrescriptionSchema = z.object({
   body: z.object({
     patientId: z.string().uuid("Invalid Patient ID"),
-    chamberId: z.string().uuid("Invalid Chamber ID").optional(),
+    chamberId: z.string().uuid("Invalid Chamber ID"),
     complaints: z.string().optional(),
     diagnosis: z.string().optional(),
     // Clinical Vitals (moved to ClinicalObservation table)

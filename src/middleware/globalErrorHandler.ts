@@ -87,6 +87,7 @@ function globalErrorHandler(
     400: "VALIDATION_ERROR",
     401: "UNAUTHORIZED",
     403: "FORBIDDEN",
+    402: "PAYMENT_REQUIRED",
     404: "RESOURCE_NOT_FOUND",
     409: "CONFLICT",
     429: "RATE_LIMITED",

@@ -45,6 +45,8 @@ const checkFeatureAccess = async (
     throw createAppError(
       "No active subscription found for this feature",
       Status.PAYMENT_REQUIRED,
+      true,
+      "SUBSCRIPTION_REQUIRED",
     );
   }
 
