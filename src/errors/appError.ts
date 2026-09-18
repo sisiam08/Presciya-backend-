@@ -4,10 +4,12 @@ export const createAppError = (
   message: string,
   statusCode: number,
   isOperational: boolean = true,
+  code?: string,
 ): IAppErrorType => {
   const error = new Error(message) as IAppErrorType;
   error.statusCode = statusCode;
   error.isOperational = isOperational;
+  if (code) error.code = code;
 
   if (Error.captureStackTrace) {
     Error.captureStackTrace(error, createAppError);

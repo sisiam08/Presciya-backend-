@@ -5,6 +5,7 @@ import {
   WorkspaceRole,
   SystemRole,
   WorkspaceType,
+  MembershipStatus,
 } from "../../generated/prisma/enums";
 import { createAppError } from "../errors/appError";
 import config from "../config";
@@ -355,6 +356,19 @@ export const authWorkspace = (
         throw createAppError(
           "You do not have access to this workspace",
           Status.FORBIDDEN,
+          true,
+          "WORKSPACE_ACCESS_DENIED",
+        );
+      }
+
+      // Membership status is authoritative: only ACTIVE members may act.
+      // PENDING/SUSPENDED/INACTIVE memberships are rejected (Section 3.3).
+      if (membership.status !== MembershipStatus.ACTIVE) {
+        throw createAppError(
+          `Your membership for this workspace is ${membership.status}. Access denied.`,
+          Status.FORBIDDEN,
+          true,
+          "MEMBERSHIP_INACTIVE",
         );
       }
 

@@ -15,6 +15,8 @@ export const checkUserVerification = async (userId: string): Promise<void> => {
       throw createAppError(
         `Your doctor profile is not verified yet. Current status: ${doctor.verificationStatus}. You can only view data, but cannot perform any write operations until your profile is approved.`,
         Status.FORBIDDEN,
+        true,
+        "VERIFICATION_REQUIRED",
       );
     }
     return;
@@ -31,6 +33,8 @@ export const checkUserVerification = async (userId: string): Promise<void> => {
       throw createAppError(
         `Your institution profile is not verified yet. Current status: ${institution.verificationStatus}. You can only view data, but cannot perform any write operations until your profile is approved.`,
         Status.FORBIDDEN,
+        true,
+        "VERIFICATION_REQUIRED",
       );
     }
     return;

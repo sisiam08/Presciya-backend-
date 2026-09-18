@@ -82,10 +82,25 @@ function globalErrorHandler(
     }
   }
 
+  // Stable, machine-readable code the frontend can branch on (Section 22).
+  const codeByStatus: Record<number, string> = {
+    400: "VALIDATION_ERROR",
+    401: "UNAUTHORIZED",
+    403: "FORBIDDEN",
+    404: "RESOURCE_NOT_FOUND",
+    409: "CONFLICT",
+    429: "RATE_LIMITED",
+    500: "INTERNAL_ERROR",
+  };
+  const errorCode = err.code || codeByStatus[statusCode] || "INTERNAL_ERROR";
+
   res.status(statusCode).json({
     success: false,
     message: errorMessage,
-    ...(errorDetails && { errors: errorDetails })
+    code: errorCode,
+    details: errorDetails,
+    // Backward-compatible alias for existing clients
+    ...(errorDetails && { errors: errorDetails }),
   });
 }
 

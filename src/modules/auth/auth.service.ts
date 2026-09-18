@@ -342,7 +342,12 @@ const logIn = async (
   });
 
   if (!user) {
-    throw createAppError("Invalid email or password", Status.UNAUTHORIZED);
+    throw createAppError(
+      "Invalid email or password",
+      Status.UNAUTHORIZED,
+      true,
+      "AUTH_INVALID_CREDENTIALS",
+    );
   }
 
   if (!user.isActive) {
@@ -381,7 +386,12 @@ const logIn = async (
         status: LoginStatus.FAILED,
       },
     });
-    throw createAppError("Invalid email or password", Status.UNAUTHORIZED);
+    throw createAppError(
+      "Invalid email or password",
+      Status.UNAUTHORIZED,
+      true,
+      "AUTH_INVALID_CREDENTIALS",
+    );
   }
 
   await prisma.user.update({
