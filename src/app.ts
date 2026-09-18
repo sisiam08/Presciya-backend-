@@ -14,14 +14,18 @@ app.use(requestId);
 app.use(requestLogger);
 
 app.use(helmet());
-app.use(generalLimiter);
 
+// CORS must run before the rate limiter so that a 429 (or any error) response
+// still carries CORS headers — otherwise the browser reports a misleading
+// "Network Error" and the client cannot read the real status.
 app.use(
   cors({
     origin: "http://localhost:3000",
     credentials: true,
   }),
 );
+
+app.use(generalLimiter);
 
 app.use(cookieParser());
 

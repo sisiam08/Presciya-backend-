@@ -1,10 +1,19 @@
 import rateLimit from "express-rate-limit";
 import { Status } from "../errors/httpStatus";
 
+// CORS preflight requests and health probes must never be rate-limited: a
+// blocked preflight breaks the browser's ability to even read the error, and
+// health checks should always respond.
+const skipPreflight = (req: any) =>
+  req.method === "OPTIONS" ||
+  (typeof req.originalUrl === "string" &&
+    req.originalUrl.startsWith("/api/v1/health"));
+
 // General API rate limiter: max 300 requests per 15 minutes
 export const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 300,
+  skip: skipPreflight,
   message: {
     success: false,
     statusCode: Status.TOO_MANY_REQUESTS,
@@ -18,6 +27,7 @@ export const generalLimiter = rateLimit({
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10,
+  skip: skipPreflight,
   message: {
     success: false,
     statusCode: Status.TOO_MANY_REQUESTS,
@@ -31,6 +41,7 @@ export const authLimiter = rateLimit({
 export const publicVerifyLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 30,
+  skip: skipPreflight,
   message: {
     success: false,
     statusCode: Status.TOO_MANY_REQUESTS,
