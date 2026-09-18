@@ -21,6 +21,21 @@ const submitVerificationRequest = async (
   workspaceId: string,
   submittedData: Record<string, any>,
 ) => {
+  // The request must reference a workspace the user actually belongs to.
+  const membership = await prisma.membership.findUnique({
+    where: { userId_workspaceId: { userId, workspaceId } },
+    select: { status: true },
+  });
+
+  if (!membership) {
+    throw createAppError(
+      "You do not have access to this workspace",
+      Status.FORBIDDEN,
+      true,
+      "WORKSPACE_ACCESS_DENIED",
+    );
+  }
+
   // Check if user is a doctor or institution
   if (type === VerificationType.PERSONAL) {
     const doctor = await prisma.doctor.findUnique({
@@ -197,6 +212,8 @@ const markUnderReview = async (requestId: string, reviewedByUserId: string) => {
     throw createAppError(
       "Only pending requests can be moved to under review",
       Status.BAD_REQUEST,
+      true,
+      "INVALID_STATE",
     );
   }
 
@@ -245,10 +262,14 @@ const approveRequest = async (requestId: string, reviewedByUserId: string) => {
     throw createAppError("Verification request not found", Status.NOT_FOUND);
   }
 
-  if (request.status === VerificationStatus.APPROVED) {
+  // State machine (Section 7.5): PENDING → UNDER_REVIEW → APPROVED.
+  // Approval is only valid from UNDER_REVIEW.
+  if (request.status !== VerificationStatus.UNDER_REVIEW) {
     throw createAppError(
-      "This request has already been approved",
+      "Only requests that are under review can be approved. Move the request to under review first.",
       Status.BAD_REQUEST,
+      true,
+      "INVALID_STATE",
     );
   }
 
@@ -335,10 +356,13 @@ const rejectRequest = async (
     throw createAppError("Verification request not found", Status.NOT_FOUND);
   }
 
-  if (request.status === VerificationStatus.REJECTED) {
+  // State machine (Section 7.5): only an UNDER_REVIEW request can be rejected.
+  if (request.status !== VerificationStatus.UNDER_REVIEW) {
     throw createAppError(
-      "This request has already been rejected",
+      "Only requests that are under review can be rejected. Move the request to under review first.",
       Status.BAD_REQUEST,
+      true,
+      "INVALID_STATE",
     );
   }
 
