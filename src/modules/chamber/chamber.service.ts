@@ -99,9 +99,9 @@ const createChamber = async (
   });
 };
 
-const getChamberById = async (id: string) => {
+const getChamberById = async (id: string, workspaceId: string) => {
   const chamber = await prisma.chamber.findFirst({
-    where: { id, isActive: true },
+    where: { id, workspaceId, isActive: true },
     include: {
       contactNumbers: true,
       schedules: true,
@@ -115,22 +115,10 @@ const getChamberById = async (id: string) => {
   return chamber;
 };
 
-const getMyChambers = async (userId: string) => {
-  // Resolve workspace for user and return chambers in that workspace
-  const workspace = await prisma.workspace.findFirst({
-    where: { ownerId: userId },
-    select: { id: true },
-  });
-  let workspaceId = workspace?.id;
-  if (!workspaceId) {
-    const membership = await prisma.membership.findFirst({
-      where: { userId },
-      select: { workspaceId: true },
-    });
-    workspaceId = membership?.workspaceId ?? undefined;
-  }
-
-  if (!workspaceId) return [];
+const getMyChambers = async (userId: string, workspaceId: string) => {
+  // Chambers are scoped to the active workspace (Section 6.4). `userId` is kept
+  // for signature compatibility.
+  void userId;
 
   return await prisma.chamber.findMany({
     where: { workspaceId, isActive: true },
@@ -138,14 +126,19 @@ const getMyChambers = async (userId: string) => {
   });
 };
 
-const updateChamber = async (id: string, userId: string, data: any) => {
+const updateChamber = async (
+  id: string,
+  userId: string,
+  workspaceId: string,
+  data: any,
+) => {
   // Check if user is verified to perform this action
   await checkUserVerification(userId);
 
   const { phones, ...chamberData } = data;
 
   const chamber = await prisma.chamber.findFirst({
-    where: { id, isActive: true },
+    where: { id, workspaceId, isActive: true },
   });
 
   if (!chamber) {
@@ -194,12 +187,16 @@ const updateChamber = async (id: string, userId: string, data: any) => {
   });
 };
 
-const deleteChamber = async (id: string, userId: string) => {
+const deleteChamber = async (
+  id: string,
+  userId: string,
+  workspaceId: string,
+) => {
   // Check if user is verified to perform this action
   await checkUserVerification(userId);
 
-  const chamber = await prisma.chamber.findUnique({
-    where: { id },
+  const chamber = await prisma.chamber.findFirst({
+    where: { id, workspaceId },
   });
 
   if (!chamber) {
@@ -229,6 +226,7 @@ const deleteChamber = async (id: string, userId: string) => {
 };
 
 const addChamberSchedule = async (
+  workspaceId: string,
   chamberId: string,
   scheduleData: {
     dayOfWeek: string;
@@ -237,12 +235,12 @@ const addChamberSchedule = async (
     maxSerials: number;
   },
 ) => {
-  const chamber = await prisma.chamber.findUnique({
-    where: { id: chamberId },
+  const chamber = await prisma.chamber.findFirst({
+    where: { id: chamberId, workspaceId },
   });
 
   if (!chamber) {
-    throw createAppError("Chamber not found", Status.NOT_FOUND);
+    throw createAppError("Chamber not found in workspace", Status.NOT_FOUND);
   }
 
   return await prisma.chamberSchedule.create({
@@ -253,12 +251,16 @@ const addChamberSchedule = async (
   });
 };
 
-const deleteChamberSchedule = async (scheduleId: string) => {
+const deleteChamberSchedule = async (
+  workspaceId: string,
+  scheduleId: string,
+) => {
   const schedule = await prisma.chamberSchedule.findUnique({
     where: { id: scheduleId },
+    include: { chamber: { select: { workspaceId: true } } },
   });
 
-  if (!schedule) {
+  if (!schedule || schedule.chamber.workspaceId !== workspaceId) {
     throw createAppError("Schedule not found", Status.NOT_FOUND);
   }
 

@@ -22,7 +22,8 @@ const createChamber = catchAsync(async (req: Request, res: Response) => {
 
 const getChamberById = catchAsync(async (req: Request, res: Response) => {
   const id = req.params.id as string;
-  const result = await ChamberServices.getChamberById(id);
+  const workspaceId = (req as any).workspaceId as string;
+  const result = await ChamberServices.getChamberById(id, workspaceId);
 
   sendResponse(res, {
     statusCode: Status.OK,
@@ -34,7 +35,8 @@ const getChamberById = catchAsync(async (req: Request, res: Response) => {
 
 const getMyChambers = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.id as string;
-  const result = await ChamberServices.getMyChambers(userId);
+  const workspaceId = (req as any).workspaceId as string;
+  const result = await ChamberServices.getMyChambers(userId, workspaceId);
 
   sendResponse(res, {
     statusCode: Status.OK,
@@ -47,7 +49,13 @@ const getMyChambers = catchAsync(async (req: Request, res: Response) => {
 const updateChamber = catchAsync(async (req: Request, res: Response) => {
   const id = req.params.id as string;
   const userId = req.user?.id as string;
-  const result = await ChamberServices.updateChamber(id, userId, req.body);
+  const workspaceId = (req as any).workspaceId as string;
+  const result = await ChamberServices.updateChamber(
+    id,
+    userId,
+    workspaceId,
+    req.body,
+  );
 
   sendResponse(res, {
     statusCode: Status.OK,
@@ -60,7 +68,8 @@ const updateChamber = catchAsync(async (req: Request, res: Response) => {
 const deleteChamber = catchAsync(async (req: Request, res: Response) => {
   const id = req.params.id as string;
   const userId = req.user?.id as string;
-  await ChamberServices.deleteChamber(id, userId);
+  const workspaceId = (req as any).workspaceId as string;
+  await ChamberServices.deleteChamber(id, userId, workspaceId);
 
   sendResponse(res, {
     statusCode: Status.OK,
@@ -72,7 +81,12 @@ const deleteChamber = catchAsync(async (req: Request, res: Response) => {
 
 const addChamberSchedule = catchAsync(async (req: Request, res: Response) => {
   const id = req.params.id as string;
-  const result = await ChamberServices.addChamberSchedule(id, req.body);
+  const workspaceId = (req as any).workspaceId as string;
+  const result = await ChamberServices.addChamberSchedule(
+    workspaceId,
+    id,
+    req.body,
+  );
 
   sendResponse(res, {
     statusCode: Status.CREATED,
@@ -84,7 +98,8 @@ const addChamberSchedule = catchAsync(async (req: Request, res: Response) => {
 
 const deleteChamberSchedule = catchAsync(async (req: Request, res: Response) => {
   const scheduleId = req.params.scheduleId as string;
-  await ChamberServices.deleteChamberSchedule(scheduleId);
+  const workspaceId = (req as any).workspaceId as string;
+  await ChamberServices.deleteChamberSchedule(workspaceId, scheduleId);
 
   sendResponse(res, {
     statusCode: Status.OK,

@@ -18,11 +18,19 @@ router.post(
   ChamberControllers.createChamber,
 );
 
-// Get user's chambers
-router.get("/my-chambers", ChamberControllers.getMyChambers);
+// Get user's chambers (active workspace)
+router.get(
+  "/my-chambers",
+  authWorkspace([]) as any,
+  ChamberControllers.getMyChambers,
+);
 
-// Get chamber by ID
-router.get("/:id", ChamberControllers.getChamberById);
+// Get chamber by ID (active workspace)
+router.get(
+  "/:id",
+  authWorkspace([], { resource: "chamber" }) as any,
+  ChamberControllers.getChamberById,
+);
 
 // Update chamber (chamber owner only)
 router.patch(
