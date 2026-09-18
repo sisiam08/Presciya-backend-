@@ -31,6 +31,10 @@ router.get(
   workspaceController.getPendingInvitations,
 );
 
+// Verify an invitation token (public) — declared after /invitations/pending so
+// that literal path is never captured by :token.
+router.get("/invitations/:token", workspaceController.verifyInvitation);
+
 // Accept invitation
 router.post(
   "/invitations/accept",

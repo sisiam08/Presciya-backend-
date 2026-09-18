@@ -324,6 +324,27 @@ const cancelInvitation = catchAsync(
   },
 );
 
+// Verify an invitation token (public). Lets the accept page show the workspace
+// details before the invitee logs in / accepts. Only non-sensitive fields are
+// returned — never the full invitation record.
+const verifyInvitation = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const token = req.params.token as string;
+    const invitation = await invitationService.verifyInvitationToken(token);
+
+    res.json({
+      success: true,
+      data: {
+        workspaceName: invitation.workspace?.name ?? null,
+        workspaceType: invitation.workspace?.type ?? null,
+        role: invitation.role,
+        email: invitation.email,
+        expiresAt: invitation.expiresAt,
+      },
+    });
+  },
+);
+
 export const workspaceController = {
   createWorkspace,
   updateWorkspace,
@@ -341,4 +362,5 @@ export const workspaceController = {
   rejectInvitation,
   getWorkspaceInvitations,
   cancelInvitation,
+  verifyInvitation,
 };

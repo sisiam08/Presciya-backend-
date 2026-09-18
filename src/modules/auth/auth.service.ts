@@ -500,12 +500,71 @@ const logIn = async (
     (ws) => ws.status === MembershipStatus.ACTIVE,
   );
 
-  // If all workspaces are pending/inactive
+  // No active membership yet. An invited user must still be able to sign in so
+  // they can accept their invitation (the invitation email links to the accept
+  // page). The token carries no active workspace; only auth-only endpoints such
+  // as accepting an invitation are reachable until a membership is accepted.
   if (acceptedWorkspaces.length === 0) {
-    throw createAppError(
-      "Your membership for all workspaces is pending. Please check your email and accept the invitations.",
-      Status.FORBIDDEN,
+    const hasPendingInvitation = workspaces.some(
+      (ws) => ws.status === MembershipStatus.PENDING,
     );
+
+    if (!hasPendingInvitation) {
+      throw createAppError(
+        "Your membership for all workspaces is pending. Please check your email and accept the invitations.",
+        Status.FORBIDDEN,
+      );
+    }
+
+    const { accessToken, refreshToken } = generateTokens({
+      userId: user.id,
+      systemRole: user.systemRole,
+    });
+
+    await prisma.session.create({
+      data: {
+        userId: user.id,
+        refreshToken,
+        deviceInfo: deviceInfo ?? null,
+        ipAddress: ipAddress ?? null,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    await prisma.loginHistory.create({
+      data: {
+        userId: user.id,
+        ipAddress: ipAddress ?? null,
+        userAgent: deviceInfo ?? null,
+        status: LoginStatus.SUCCESS,
+      },
+    });
+
+    await AuditService.logAudit({
+      userId: user.id,
+      actionType: AuditActionType.LOGIN,
+      entityType: AuditEntityType.SYSTEM,
+      metadata: {
+        userEmail: user.email,
+        userName: user.name,
+        ipAddress,
+        deviceInfo,
+        requiresInvitationAcceptance: true,
+      },
+    });
+
+    const { password: _, ...userWithoutPassword } = user;
+
+    return {
+      data: {
+        ...userWithoutPassword,
+        profile,
+        workspaces: [],
+        requiresInvitationAcceptance: true,
+      },
+      accessToken,
+      refreshToken,
+    };
   }
 
   // If only one workspace is accepted (rest are pending)
