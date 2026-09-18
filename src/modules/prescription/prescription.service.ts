@@ -59,12 +59,26 @@ const createPrescription = async (
     throw createAppError("Doctor profile not found", Status.NOT_FOUND);
   }
 
-  const patient = await prisma.patient.findUnique({
-    where: { id: prescriptionData.patientId, isDeleted: false },
+  // BOLA/IDOR: the patient and chamber must belong to the active workspace,
+  // never trust client-supplied IDs at face value.
+  const patient = await prisma.patient.findFirst({
+    where: {
+      id: prescriptionData.patientId,
+      workspaceId,
+      isDeleted: false,
+    },
   });
 
   if (!patient) {
     throw createAppError("Patient not found", Status.NOT_FOUND);
+  }
+
+  const chamber = await prisma.chamber.findFirst({
+    where: { id: prescriptionData.chamberId, workspaceId },
+  });
+
+  if (!chamber) {
+    throw createAppError("Chamber not found", Status.NOT_FOUND);
   }
 
   return await prisma.$transaction(async (tx) => {
@@ -191,9 +205,11 @@ const createPrescription = async (
   });
 };
 
-const getPrescriptionById = async (id: string) => {
-  const prescription = await prisma.prescription.findUnique({
-    where: { id },
+const getPrescriptionById = async (id: string, workspaceId: string) => {
+  // Workspace-scoped lookup: an OWNER of one workspace must never read another
+  // workspace's prescription by guessing its ID (Section 6.4).
+  const prescription = await prisma.prescription.findFirst({
+    where: { id, workspaceId, isDeleted: false },
     include: {
       prescriptionMedicines: true,
       clinicalObservations: true,
@@ -212,12 +228,17 @@ const getPrescriptionById = async (id: string) => {
   return prescription;
 };
 
-const updatePrescription = async (id: string, userId: string, data: any) => {
+const updatePrescription = async (
+  id: string,
+  userId: string,
+  workspaceId: string,
+  data: any,
+) => {
   // Check if user is verified to perform this action
   await checkUserVerification(userId);
 
-  const prescription = await prisma.prescription.findUnique({
-    where: { id, isDeleted: false },
+  const prescription = await prisma.prescription.findFirst({
+    where: { id, workspaceId, isDeleted: false },
   });
 
   if (!prescription) {
@@ -302,12 +323,16 @@ const updatePrescription = async (id: string, userId: string, data: any) => {
   });
 };
 
-const deletePrescription = async (id: string, userId: string) => {
+const deletePrescription = async (
+  id: string,
+  userId: string,
+  workspaceId: string,
+) => {
   // Check if user is verified to perform this action
   await checkUserVerification(userId);
 
-  const prescription = await prisma.prescription.findUnique({
-    where: { id, isDeleted: false },
+  const prescription = await prisma.prescription.findFirst({
+    where: { id, workspaceId, isDeleted: false },
   });
 
   if (!prescription) {
@@ -349,29 +374,29 @@ const deletePrescription = async (id: string, userId: string) => {
 const getMyPrescriptions = async (
   userId: string,
   workspaceType: WorkspaceType,
+  workspaceId: string,
   filters: { patientPhone?: string; chamberId?: string },
   page: number = 1,
   limit: number = 10,
 ) => {
   const skip = (page - 1) * limit;
 
+  // Always scope to the active workspace so prescriptions never leak across
+  // workspaces (Section 6.4). A doctor additionally only sees their own.
   let query: any = {
     isDeleted: false,
+    workspaceId,
+    doctorUserId: userId,
   };
 
-  if (workspaceType === WorkspaceType.INSTITUTION) {
-    // For INSTITUTION role, they manage prescriptions through their workspace
-    // This requires workspace context - for now, only show their doctor prescriptions
-    query.doctorUserId = userId;
-  } else {
-    // Doctors only view their own prescriptions
+  if (workspaceType === WorkspaceType.PERSONAL) {
+    // Personal doctors must have a doctor profile
     const doctor = await prisma.doctor.findUnique({
       where: { userId },
     });
     if (!doctor) {
       throw createAppError("Doctor profile not found", Status.NOT_FOUND);
     }
-    query.doctorUserId = userId;
   }
 
   // Filter criteria
@@ -408,8 +433,9 @@ const getMyPrescriptions = async (
 };
 
 const compileHtmlPrescription = async (id: string): Promise<string> => {
-  const prescription = await prisma.prescription.findUnique({
-    where: { id },
+  // Print/download are only permitted for finalized prescriptions (Section 13.3).
+  const prescription = await prisma.prescription.findFirst({
+    where: { id, status: PrescriptionStatus.FINALIZED, isDeleted: false },
     include: {
       prescriptionMedicines: true,
       clinicalObservations: true,
@@ -422,7 +448,10 @@ const compileHtmlPrescription = async (id: string): Promise<string> => {
   });
 
   if (!prescription) {
-    throw new Error("Prescription not found");
+    throw createAppError(
+      "Prescription not found or not finalized. Only finalized prescriptions can be printed.",
+      Status.NOT_FOUND,
+    );
   }
 
   // Fetch doctor profile separately since Prescription relates to User, not Doctor
@@ -508,6 +537,10 @@ const finalizePrescription = async (
   userId: string,
   workspaceId: string,
 ) => {
+  // Official prescription generation requires professional verification
+  // (Section 7.4). Unverified accounts may not finalize/lock a prescription.
+  await checkUserVerification(userId);
+
   const existing = await prisma.prescription.findUnique({
     where: { id: prescriptionId, isDeleted: false },
     select: { id: true, workspaceId: true, status: true, chamberId: true },
@@ -600,10 +633,14 @@ const finalizePrescription = async (
 
 const logPrint = async (
   prescriptionId: string,
-  userId: string,
+  userId?: string,
   ipAddress?: string,
   userAgent?: string,
 ) => {
+  // Anonymous QR/print views have no authenticated user (and the print log has
+  // a FK to User), so only record prints made by an authenticated user.
+  if (!userId) return;
+
   await prisma.prescriptionPrintLog.create({
     data: {
       prescriptionId,
@@ -615,7 +652,7 @@ const logPrint = async (
 };
 
 const verifyPrescriptionPublic = async (id: string) => {
-  const prescription = await prisma.prescription.findUnique({
+  const prescription = await prisma.prescription.findFirst({
     where: { id, isDeleted: false, status: PrescriptionStatus.FINALIZED },
     select: {
       id: true,
@@ -623,9 +660,9 @@ const verifyPrescriptionPublic = async (id: string) => {
       serialNumber: true,
       createdAt: true,
       nextVisitDate: true,
-      doctor: { select: { id: true, name: true, bmdcNumber: true } },
+      doctorUserId: true,
+      doctor: { select: { id: true, name: true } },
       chamber: { select: { id: true, name: true } },
-      patient: { select: { name: true } },
     },
   });
 
@@ -636,8 +673,15 @@ const verifyPrescriptionPublic = async (id: string) => {
     );
   }
 
+  // BMDC lives on the Doctor profile, not the User record.
+  const doctorProfile = await prisma.doctor.findUnique({
+    where: { userId: prescription.doctorUserId },
+    select: { bmdcNumber: true },
+  });
+
   // Public endpoint: return only the minimum verification info.
-  // Never expose patient contact/clinical data or medicine details.
+  // Never expose patient identity, contact/clinical data, or medicine details
+  // (Section 15).
   return {
     verified: true,
     prescriptionId: prescription.id,
@@ -645,9 +689,8 @@ const verifyPrescriptionPublic = async (id: string) => {
     issuedAt: prescription.createdAt,
     nextVisitDate: prescription.nextVisitDate,
     doctorName: prescription.doctor?.name ?? "",
-    bmdcNumber: prescription.doctor?.bmdcNumber ?? null,
+    bmdcNumber: doctorProfile?.bmdcNumber ?? null,
     chamberName: prescription.chamber?.name ?? null,
-    patientName: prescription.patient?.name ?? null,
   };
 };
 

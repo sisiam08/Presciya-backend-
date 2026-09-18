@@ -26,7 +26,8 @@ const createPrescription = catchAsync(async (req: Request, res: Response) => {
 
 const getPrescriptionById = catchAsync(async (req: Request, res: Response) => {
   const id = requireStringParam(req.params.id, "Prescription ID");
-  const result = await PrescriptionServices.getPrescriptionById(id);
+  const workspaceId = (req as any).workspaceId as string;
+  const result = await PrescriptionServices.getPrescriptionById(id, workspaceId);
 
   sendResponse(res, {
     statusCode: Status.OK,
@@ -39,9 +40,11 @@ const getPrescriptionById = catchAsync(async (req: Request, res: Response) => {
 const updatePrescription = catchAsync(async (req: Request, res: Response) => {
   const id = requireStringParam(req.params.id, "Prescription ID");
   const userId = req.user?.id as string;
+  const workspaceId = (req as any).workspaceId as string;
   const result = await PrescriptionServices.updatePrescription(
     id,
     userId,
+    workspaceId,
     req.body,
   );
 
@@ -56,7 +59,8 @@ const updatePrescription = catchAsync(async (req: Request, res: Response) => {
 const deletePrescription = catchAsync(async (req: Request, res: Response) => {
   const id = requireStringParam(req.params.id, "Prescription ID");
   const userId = req.user?.id as string;
-  await PrescriptionServices.deletePrescription(id, userId);
+  const workspaceId = (req as any).workspaceId as string;
+  await PrescriptionServices.deletePrescription(id, userId, workspaceId);
 
   sendResponse(res, {
     statusCode: Status.OK,
@@ -69,11 +73,13 @@ const deletePrescription = catchAsync(async (req: Request, res: Response) => {
 const getMyPrescriptions = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.id as string;
   const workspaceType = req.user?.workspaceType as WorkspaceType;
+  const workspaceId = (req as any).workspaceId as string;
   const { patientPhone, chamberId, page = 1, limit = 10 } = req.query;
 
   const result = await PrescriptionServices.getMyPrescriptions(
     userId,
     workspaceType,
+    workspaceId,
     {
       patientPhone: patientPhone as string,
       chamberId: chamberId as string,
@@ -112,7 +118,9 @@ const finalizePrescription = catchAsync(async (req: Request, res: Response) => {
 
 const printPrescription = catchAsync(async (req: Request, res: Response) => {
   const id = requireStringParam(req.params.id, "Prescription ID");
-  const userId = req.user?.id || "anonymous-viewer";
+  // Public route: an authenticated doctor may print (logged); anonymous QR
+  // viewers are allowed but not logged (print log has a User FK).
+  const userId = req.user?.id;
 
   // Render the A4 print ready HTML template
   const html = await PrescriptionServices.compileHtmlPrescription(id);
