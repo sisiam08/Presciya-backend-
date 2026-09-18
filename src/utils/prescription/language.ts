@@ -72,3 +72,78 @@ export const translateMealTiming = (
     String(value).replace(/_/g, " ")
   );
 };
+
+// ─── System-generated value localisation ─────────────────────────────────────
+// Durations and dates are produced by the system (not typed by the doctor), so
+// they are localised to the prescription language. Free text the doctor writes
+// is never translated.
+
+const BN_DIGITS = ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯"];
+
+export const toBanglaDigits = (value: string | number): string =>
+  String(value).replace(/\d/g, (d) => BN_DIGITS[Number(d)] ?? d);
+
+const BN_MONTHS = [
+  "জানুয়ারি",
+  "ফেব্রুয়ারি",
+  "মার্চ",
+  "এপ্রিল",
+  "মে",
+  "জুন",
+  "জুলাই",
+  "আগস্ট",
+  "সেপ্টেম্বর",
+  "অক্টোবর",
+  "নভেম্বর",
+  "ডিসেম্বর",
+];
+
+export const formatPrescriptionDate = (
+  date: Date,
+  language?: string | null,
+): string => {
+  if (isBangla(language)) {
+    const month = BN_MONTHS[date.getMonth()] ?? "";
+    return `${toBanglaDigits(date.getDate())} ${month}, ${toBanglaDigits(date.getFullYear())}`;
+  }
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+};
+
+const BN_DURATION_UNITS: Record<string, string> = {
+  day: "দিন",
+  week: "সপ্তাহ",
+  month: "মাস",
+};
+
+const singularUnit = (unit: string): string =>
+  unit.toLowerCase().replace(/s$/, "");
+
+// "4 weeks" -> "৪ সপ্তাহ" (Bangla) / "4 weeks" (English).
+export const formatDurationValue = (
+  value: number,
+  unit: string,
+  language?: string | null,
+): string => {
+  if (isBangla(language)) {
+    const bn = BN_DURATION_UNITS[singularUnit(unit)];
+    if (bn) return `${toBanglaDigits(value)} ${bn}`;
+  }
+  const plural = value === 1 ? unit : `${unit}s`;
+  return `${value} ${plural}`;
+};
+
+// Localise a legacy free-text duration ("7 days" -> "৭ দিন") when possible.
+export const localizeDurationText = (
+  text: string,
+  language?: string | null,
+): string => {
+  if (!text || !isBangla(language)) return text;
+  return text.replace(/(\d+)\s*([A-Za-z]+)/g, (full, num: string, unit: string) => {
+    const bn = BN_DURATION_UNITS[singularUnit(unit)];
+    return bn ? `${toBanglaDigits(num)} ${bn}` : full;
+  });
+};

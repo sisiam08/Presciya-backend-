@@ -120,6 +120,42 @@ describe("prescription rendering — language", () => {
     expect(html).toContain("Noto+Sans+Bengali");
     expect(html).toContain("Noto Sans Bengali");
   });
+
+  it("localises system-generated duration values in Bangla", () => {
+    const html = generatePrescriptionHtml(
+      baseData({
+        language: "BANGLA",
+        medicines: [
+          { ...snapshotMedicine(1), duration: "7 days" },
+          {
+            ...snapshotMedicine(2),
+            duration: "4 weeks",
+            durationValue: 4,
+            durationUnit: "week",
+          },
+        ],
+      }),
+    );
+    expect(html).toContain("৭ দিন"); // 7 days
+    expect(html).toContain("৪ সপ্তাহ"); // 4 weeks
+    expect(html).not.toContain("7 days");
+  });
+
+  it("keeps duration values in English for the English language", () => {
+    const html = generatePrescriptionHtml(
+      baseData({ language: "ENGLISH", medicines: [snapshotMedicine(1)] }),
+    );
+    expect(html).toContain("7 days");
+  });
+
+  it("localises the next-visit date in Bangla", () => {
+    const html = generatePrescriptionHtml(
+      baseData({ language: "BANGLA", nextVisitDate: new Date("2026-01-08T10:00:00Z") }),
+    );
+    // 8 January 2026 -> Bangla month + Bangla digits
+    expect(html).toContain("জানুয়ারি");
+    expect(html).toContain("২০২৬");
+  });
 });
 
 describe("prescription rendering — five templates", () => {

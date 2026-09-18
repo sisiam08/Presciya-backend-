@@ -4,7 +4,15 @@ import {
   PrescriptionDesignTemplate,
   PrescriptionLanguage,
 } from "../../../generated/prisma/enums";
-import { getPrescriptionLabels, isBangla, translateMealTiming, PrescriptionLabels } from "./language";
+import {
+  formatDurationValue,
+  formatPrescriptionDate,
+  getPrescriptionLabels,
+  isBangla,
+  localizeDurationText,
+  translateMealTiming,
+  PrescriptionLabels,
+} from "./language";
 import { escapeHtml, escapeHtmlMultiline, formatDoctorName, safeUrl } from "./html";
 
 export interface MedicineViewModel {
@@ -95,14 +103,20 @@ const readMedicineField = (
   return asString(med[lower] ?? med[`snapshot${field}`]);
 };
 
-// Format the duration from structured (value+unit) or legacy free text.
-const formatDuration = (med: Record<string, any>): string => {
+// Format the duration from structured (value+unit) or legacy free text, in the
+// prescription language (system-generated value, so it is localised).
+const formatDuration = (
+  med: Record<string, any>,
+  language: string | null | undefined,
+): string => {
   if (med.durationValue != null && med.durationUnit) {
-    const unit = String(med.durationUnit);
-    const plural = med.durationValue === 1 ? unit : `${unit}s`;
-    return `${med.durationValue} ${plural}`;
+    return formatDurationValue(
+      Number(med.durationValue),
+      String(med.durationUnit),
+      language,
+    );
   }
-  return asString(med.duration);
+  return localizeDurationText(asString(med.duration), language);
 };
 
 // Build the dosage/instruction line adapted to the instruction type so no
@@ -178,18 +192,10 @@ export const buildPrescriptionViewModel = (
     PrescriptionDesignTemplate.DEFAULT;
   const labels = getPrescriptionLabels(language);
 
-  const dateStr = new Date(createdAt).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const dateStr = formatPrescriptionDate(new Date(createdAt), language);
 
   const nextVisitStr = nextVisitDate
-    ? new Date(nextVisitDate).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })
+    ? formatPrescriptionDate(new Date(nextVisitDate), language)
     : labels.asNeeded;
 
   const generatedAtStr = new Date().toLocaleString("en-US", {
@@ -228,7 +234,7 @@ export const buildPrescriptionViewModel = (
       type: escapeHtml(readMedicineField(med, "Type")),
       usageType: usage,
       dosage: escapeHtml(buildDosage(med)),
-      duration: escapeHtml(formatDuration(med)),
+      duration: escapeHtml(formatDuration(med, language)),
       mealTimingLabel: escapeHtml(mealLabel),
       instruction: escapeHtml(med.instruction),
       notes: escapeHtml(med.notes),

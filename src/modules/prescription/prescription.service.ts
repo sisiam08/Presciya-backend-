@@ -1102,6 +1102,34 @@ const previewTemplateSample = async (
     }),
   ]);
 
+  // Sample free-text content is provided in the selected language so the
+  // Settings preview demonstrates the full Bangla experience. (For real
+  // prescriptions the doctor writes the free text; only system values such as
+  // duration and dates are localised automatically.)
+  const isBn = language === PrescriptionLanguage.BANGLA;
+  const sample = isBn
+    ? {
+        complaints: "তিন দিন ধরে জ্বর ও মাথাব্যথা",
+        diagnosis: "তীব্র ভাইরাল জ্বর",
+        clinicalNotes: "প্রচুর পানি পান করুন এবং সম্পূর্ণ বিশ্রাম নিন।",
+        advises: "কোর্সটি সম্পূর্ণ করুন। তিন দিনের বেশি জ্বর থাকলে পুনরায় আসুন।",
+        instruction: "খাবারের পরে পানি দিয়ে খান।",
+        patientName: "মোঃ রহিম উদ্দিন",
+        allergies: "কোনোটি নয়",
+        chronicDiseases: "কোনোটি নয়",
+      }
+    : {
+        complaints: "Fever and headache for 3 days",
+        diagnosis: "Acute viral fever",
+        clinicalNotes: "Drink plenty of water and take complete rest.",
+        advises:
+          "Complete the full course. Return if the fever persists beyond 3 days.",
+        instruction: "Take after meals with plenty of water.",
+        patientName: "Md. Rahim Uddin",
+        allergies: "None known",
+        chronicDiseases: "None",
+      };
+
   const renderData: IPdfRenderData = {
     id: "SAMPLE-PRESCRIPTION",
     serialNumber: "PRS-SAMPLE-000001",
@@ -1110,16 +1138,15 @@ const previewTemplateSample = async (
     status: "FINALIZED",
     language,
     template,
-    complaints: "Fever and headache for 3 days",
-    diagnosis: "Acute viral fever",
+    complaints: sample.complaints,
+    diagnosis: sample.diagnosis,
     bloodPressure: "120/80",
     pulse: 82,
     temperature: 101.2,
     weight: 68,
     height: "172 cm",
-    clinicalNotes: "Drink plenty of water and take complete rest.",
-    advises:
-      "Complete the full course. Return if the fever persists beyond 3 days.",
+    clinicalNotes: sample.clinicalNotes,
+    advises: sample.advises,
     nextVisitDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     medicines: [
       {
@@ -1131,7 +1158,7 @@ const previewTemplateSample = async (
         dosagePattern: "1+0+1",
         mealTiming: "AFTER_MEAL",
         duration: "7 days",
-        instruction: "Take after meals with plenty of water.",
+        instruction: sample.instruction,
       },
       {
         brandName: "Seclo",
@@ -1183,13 +1210,13 @@ const previewTemplateSample = async (
           chamberPhone: [{ phone: "+880 1700-000000" }],
         },
     patient: {
-      name: "Md. Rahim Uddin",
+      name: sample.patientName,
       age: 35,
       gender: "MALE",
       phone: "01711111111",
       bloodGroup: "B+",
-      allergies: "None known",
-      chronicDiseases: "None",
+      allergies: sample.allergies,
+      chronicDiseases: sample.chronicDiseases,
       patientIdentifier: "P-000123",
     },
   };
