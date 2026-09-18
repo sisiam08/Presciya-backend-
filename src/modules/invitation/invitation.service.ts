@@ -134,16 +134,23 @@ const inviteUser = async (
         Status.CONFLICT,
       );
     }
-  }
 
-  await prisma.membership.create({
-    data: {
-      userId: existingUser.id,
-      workspaceId,
-      role,
-      status: MembershipStatus.PENDING,
-    },
-  });
+    // INACTIVE / SUSPENDED membership: re-invite by resetting it to PENDING
+    // rather than creating a duplicate row (unique userId+workspaceId).
+    await prisma.membership.update({
+      where: { id: existingMembership.id },
+      data: { role, status: MembershipStatus.PENDING },
+    });
+  } else {
+    await prisma.membership.create({
+      data: {
+        userId: existingUser.id,
+        workspaceId,
+        role,
+        status: MembershipStatus.PENDING,
+      },
+    });
+  }
 
   const invitation = await prisma.invitation.create({
     data: {
@@ -303,8 +310,20 @@ const acceptInvitation = async (
         });
 
         if (institution && doctor) {
-          await tx.institutionDoctor.create({
-            data: {
+          await tx.institutionDoctor.upsert({
+            where: {
+              institutionId_doctorId: {
+                institutionId: institution.id,
+                doctorId: doctor.id,
+              },
+            },
+            update: {
+              isActive: true,
+              ...(invitation.departmentId
+                ? { departmentId: invitation.departmentId }
+                : {}),
+            },
+            create: {
               institutionId: institution.id,
               doctorId: doctor.id,
               ...(invitation.departmentId
@@ -383,9 +402,27 @@ const rejectInvitation = async (
     throw createAppError("Invitation already rejected", Status.BAD_REQUEST);
   }
 
-  await prisma.invitation.update({
-    where: { id: invitation.id },
-    data: { rejectedAt: new Date() },
+  await prisma.$transaction(async (tx) => {
+    await tx.invitation.update({
+      where: { id: invitation.id },
+      data: { rejectedAt: new Date() },
+    });
+
+    // Release the pending membership so the workspace can re-invite later.
+    const invitee = await tx.user.findUnique({
+      where: { email: invitation.email },
+      select: { id: true },
+    });
+    if (invitee) {
+      await tx.membership.updateMany({
+        where: {
+          userId: invitee.id,
+          workspaceId: invitation.workspaceId,
+          status: MembershipStatus.PENDING,
+        },
+        data: { status: MembershipStatus.INACTIVE },
+      });
+    }
   });
 
   // Audit: Log invitation rejection
@@ -474,8 +511,26 @@ const cancelInvitation = async (
     );
   }
 
-  await prisma.invitation.delete({
-    where: { id: invitationId },
+  await prisma.$transaction(async (tx) => {
+    await tx.invitation.delete({
+      where: { id: invitationId },
+    });
+
+    // Release the pending membership so the workspace can re-invite later.
+    const invitee = await tx.user.findUnique({
+      where: { email: invitation.email },
+      select: { id: true },
+    });
+    if (invitee) {
+      await tx.membership.updateMany({
+        where: {
+          userId: invitee.id,
+          workspaceId,
+          status: MembershipStatus.PENDING,
+        },
+        data: { status: MembershipStatus.INACTIVE },
+      });
+    }
   });
 
   // Audit: Log invitation cancellation

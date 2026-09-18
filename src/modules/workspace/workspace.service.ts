@@ -42,6 +42,7 @@ const createPersonalWorkspace = async (
         create: {
           userId,
           role: WorkspaceRole.OWNER,
+          status: MembershipStatus.ACTIVE,
         },
       },
     },
@@ -95,6 +96,7 @@ const createInstitutionWorkspace = async (
         create: {
           userId,
           role: WorkspaceRole.OWNER,
+          status: MembershipStatus.ACTIVE,
         },
       },
     },
@@ -352,6 +354,23 @@ const getWorkspace = async (
     throw createAppError("Workspace not found", Status.NOT_FOUND);
   }
 
+  // Report the caller's real role, never a hardcoded OWNER.
+  let callerRole: WorkspaceRole = WorkspaceRole.OWNER;
+  if (userId) {
+    const membership = await prisma.membership.findUnique({
+      where: { userId_workspaceId: { userId, workspaceId } },
+      select: { role: true },
+    });
+
+    if (!membership) {
+      throw createAppError(
+        "You do not have access to this workspace",
+        Status.FORBIDDEN,
+      );
+    }
+    callerRole = membership.role;
+  }
+
   return {
     id: workspace.id,
     name: workspace.name,
@@ -359,7 +378,7 @@ const getWorkspace = async (
     type: workspace.type,
     ...(workspace.logo ? { logo: workspace.logo } : {}),
     ownerId: workspace.ownerId,
-    role: WorkspaceRole.OWNER,
+    role: callerRole,
     members: ((workspace.memberships as any) || []).length,
     owner: {
       id: workspace.owner.id,
@@ -377,6 +396,8 @@ const getUserWorkspaces = async (userId: string): Promise<any[]> => {
   const memberships = await prisma.membership.findMany({
     where: {
       userId,
+      // Only ACTIVE memberships are selectable (Section 5.3).
+      status: MembershipStatus.ACTIVE,
     },
     include: {
       workspace: {
