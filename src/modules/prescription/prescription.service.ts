@@ -255,20 +255,79 @@ const updatePrescription = async (
   }
 
   return await prisma.$transaction(async (tx) => {
-    const { medicines, status, ...rest } = data;
+    // Separate fields that do NOT belong on the Prescription model: medicine
+    // lines live in PrescriptionMedicine and vitals live in ClinicalObservation.
+    const {
+      medicines,
+      status,
+      bloodPressure,
+      pulse,
+      temperature,
+      weight,
+      height,
+      respiratoryRate,
+      nextVisitDate,
+      ...rest
+    } = data;
 
-    // 1. Update basic parameters (never pass `medicines` to the Prescription
-    //    model — medicine lines live in PrescriptionMedicine).
+    // 1. Update basic parameters.
     const updateData: Record<string, unknown> = { ...rest };
     if (status !== undefined) updateData.status = status;
-    if (rest.nextVisitDate) {
-      updateData.nextVisitDate = new Date(rest.nextVisitDate);
+    if (nextVisitDate) {
+      updateData.nextVisitDate = new Date(nextVisitDate);
     }
 
     const updated = await tx.prescription.update({
       where: { id },
       data: updateData,
     });
+
+    // 1b. Vitals → ClinicalObservation (update the latest observation or
+    //     create one). Never pass these to the Prescription model.
+    const hasVitals = [
+      bloodPressure,
+      pulse,
+      temperature,
+      weight,
+      height,
+      respiratoryRate,
+    ].some((v) => v !== undefined && v !== null && v !== "");
+
+    if (hasVitals) {
+      const vitalsData = {
+        bloodPressure: bloodPressure ?? null,
+        pulse: pulse !== undefined && pulse !== null && pulse !== ""
+          ? parseInt(String(pulse), 10) || null
+          : null,
+        temperature:
+          temperature !== undefined && temperature !== null && temperature !== ""
+            ? parseFloat(String(temperature)) || null
+            : null,
+        weight: weight !== undefined && weight !== null ? Number(weight) : null,
+        height: height ?? null,
+        respiratoryRate:
+          respiratoryRate !== undefined && respiratoryRate !== null
+            ? Number(respiratoryRate)
+            : null,
+      };
+
+      const existingObservation = await tx.clinicalObservation.findFirst({
+        where: { prescriptionId: id },
+        orderBy: { observedAt: "desc" },
+        select: { id: true },
+      });
+
+      if (existingObservation) {
+        await tx.clinicalObservation.update({
+          where: { id: existingObservation.id },
+          data: vitalsData,
+        });
+      } else {
+        await tx.clinicalObservation.create({
+          data: { prescriptionId: id, ...vitalsData },
+        });
+      }
+    }
 
     // 2. Refresh relational medicine records if updated
     if (medicines) {
