@@ -185,13 +185,21 @@ All protected routes require user cookies (`accessToken` and `refreshToken`).
 * `GET /:id/timeline` - Retrieve full patient event trail.
 
 ### 📄 Prescription Engine (`/api/v1/prescription`)
-* `POST /` - Create prescription (validates daily quota).
-* `GET /my-prescriptions` - List prescriptions written by doctor.
-* `GET /:id` - View detailed JSON structure.
-* `PATCH /:id` - Edit draft prescription parameters.
+* `POST /` - Create draft prescription (validates verification + daily quota).
+* `GET /my-prescriptions` - List prescriptions in the active workspace.
+* `GET /:id` - Workspace-scoped detail.
+* `GET /:id/preview` - Authenticated canonical A4 HTML (draft or finalized).
+* `PATCH /:id` - Edit a draft (finalized records are locked).
+* `POST /:id/finalize` - Lock, assign serial + opaque verification code.
+* `POST /:id/amend` - Create a corrected draft version (original stays intact).
 * `DELETE /:id` - Soft-delete prescription.
-* `GET /:id/print` - (Public) Compiles clean A4 HTML print.
-* `GET /:id/verify` - (Public) Verifies authenticity of prescription.
+* `GET /:id/print` - (Public, finalized only) Compiles clean A4 HTML print.
+* `GET /:id/verify` - (Public) Verifies authenticity by verification code.
+
+### 🧩 Prescription Templates (`/api/v1/prescription-templates`)
+* `GET /` - List templates in the active workspace.
+* `POST /` - Save the current medicines/advice as a reusable template.
+* `GET /:id`, `PATCH /:id`, `DELETE /:id` - Manage a template.
 
 ### 💊 Medicine Module (`/api/v1/medicine`)
 * `GET /search?query=...` - Fast typo-tolerant GIN search.
