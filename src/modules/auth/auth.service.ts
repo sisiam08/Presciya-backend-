@@ -149,6 +149,20 @@ const signUp = async (
 ) => {
   const { name, email, password, accountType, OTP } = userData;
 
+  // One email maps to exactly one User, forever (Section 1.3). Guard against a
+  // race where another request created the account after sendOTP.
+  const existingUser = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
+
+  if (existingUser) {
+    throw createAppError(
+      "An account with this email already exists. Please log in instead.",
+      Status.CONFLICT,
+    );
+  }
+
   const otpRecord = await prisma.oTP.findUnique({
     where: { email },
   });
@@ -533,6 +547,24 @@ const logIn = async (
       refreshToken,
     };
   } else {
+    // Multiple active workspaces: issue an unscoped token so the client can
+    // call /auth/switch-workspace, and require an explicit workspace choice.
+    // The client must never assume workspaces[0] is active (Section 5.3).
+    const { accessToken, refreshToken } = generateTokens({
+      userId: user.id,
+      systemRole: user.systemRole,
+    });
+
+    await prisma.session.create({
+      data: {
+        userId: user.id,
+        refreshToken,
+        deviceInfo: deviceInfo ?? null,
+        ipAddress: ipAddress ?? null,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+
     // Log Successful Login
     await prisma.loginHistory.create({
       data: {
@@ -554,6 +586,7 @@ const logIn = async (
         ipAddress,
         deviceInfo,
         acceptedWorkspacesCount: acceptedWorkspaces.length,
+        requiresWorkspaceSelection: true,
       },
     });
 
@@ -563,6 +596,7 @@ const logIn = async (
       data: {
         ...userWithoutPassword,
         profile,
+        requiresWorkspaceSelection: true,
         workspaces: acceptedWorkspaces.map((ws) => ({
           id: ws.workspace.id,
           name: ws.workspace.name,
@@ -572,6 +606,8 @@ const logIn = async (
           membershipStatus: ws.status,
         })),
       },
+      accessToken,
+      refreshToken,
     };
   }
 };
