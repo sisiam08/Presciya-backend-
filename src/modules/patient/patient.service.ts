@@ -36,12 +36,13 @@ const createPatient = async (
     throw createAppError("Doctor profile not found", Status.NOT_FOUND);
   }
 
-  // Duplicate Detection & Smart Matching
+  // Duplicate detection is workspace-scoped (Section 11): the same phone in a
+  // different workspace must not block registration here.
   if (patientData.phone) {
     const existingPatient = await prisma.patient.findFirst({
       where: {
         phone: patientData.phone,
-        doctorId: doctor.id,
+        workspaceId,
         isDeleted: false,
       },
     });
@@ -85,9 +86,11 @@ const createPatient = async (
   });
 };
 
-const getPatientById = async (id: string) => {
-  const patient = await prisma.patient.findUnique({
-    where: { id },
+const getPatientById = async (id: string, workspaceId: string) => {
+  // Workspace-scoped lookup (Section 6.4): never return another workspace's
+  // patient by guessing an ID.
+  const patient = await prisma.patient.findFirst({
+    where: { id, workspaceId, isDeleted: false },
     include: {
       prescriptions: {
         where: { isDeleted: false },
@@ -111,12 +114,17 @@ const getPatientById = async (id: string) => {
   return patient;
 };
 
-const updatePatient = async (id: string, userId: string, data: any) => {
+const updatePatient = async (
+  id: string,
+  userId: string,
+  workspaceId: string,
+  data: any,
+) => {
   // Check if user is verified to perform this action
   await checkUserVerification(userId);
 
-  const patient = await prisma.patient.findUnique({
-    where: { id, isDeleted: false },
+  const patient = await prisma.patient.findFirst({
+    where: { id, workspaceId, isDeleted: false },
   });
 
   if (!patient) {
@@ -155,12 +163,16 @@ const updatePatient = async (id: string, userId: string, data: any) => {
   });
 };
 
-const deletePatient = async (id: string, userId: string) => {
+const deletePatient = async (
+  id: string,
+  userId: string,
+  workspaceId: string,
+) => {
   // Check if user is verified to perform this action
   await checkUserVerification(userId);
 
-  const patient = await prisma.patient.findUnique({
-    where: { id, isDeleted: false },
+  const patient = await prisma.patient.findFirst({
+    where: { id, workspaceId, isDeleted: false },
   });
 
   if (!patient) {
@@ -214,20 +226,14 @@ const searchPatients = async (
 
   const skip = (page - 1) * limit;
 
-  // Query allows fuzzy match using ILIKE on name or phone,
-  // scoped to the active workspace (or patients belonging to the doctor)
+  // Fuzzy match on name or phone, strictly scoped to the active workspace so
+  // patients never leak across workspaces (Section 6.4).
   const whereClause = {
     isDeleted: false,
-    AND: [
-      {
-        OR: [{ workspaceId }, { doctorId: doctor.id }],
-      },
-      {
-        OR: [
-          { name: { contains: query, mode: "insensitive" as const } },
-          { phone: { contains: query, mode: "insensitive" as const } },
-        ],
-      },
+    workspaceId,
+    OR: [
+      { name: { contains: query, mode: "insensitive" as const } },
+      { phone: { contains: query, mode: "insensitive" as const } },
     ],
   };
 
@@ -254,9 +260,9 @@ const searchPatients = async (
   };
 };
 
-const getPatientTimeline = async (id: string) => {
-  const patient = await prisma.patient.findUnique({
-    where: { id, isDeleted: false },
+const getPatientTimeline = async (id: string, workspaceId: string) => {
+  const patient = await prisma.patient.findFirst({
+    where: { id, workspaceId, isDeleted: false },
   });
 
   if (!patient) {

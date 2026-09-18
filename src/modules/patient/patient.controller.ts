@@ -24,7 +24,8 @@ const createPatient = catchAsync(async (req: Request, res: Response) => {
 
 const getPatientById = catchAsync(async (req: Request, res: Response) => {
   const id = requireStringParam(req.params.id, "Patient ID");
-  const result = await PatientServices.getPatientById(id);
+  const workspaceId = (req as any).workspaceId as string;
+  const result = await PatientServices.getPatientById(id, workspaceId);
 
   sendResponse(res, {
     statusCode: Status.OK,
@@ -37,7 +38,13 @@ const getPatientById = catchAsync(async (req: Request, res: Response) => {
 const updatePatient = catchAsync(async (req: Request, res: Response) => {
   const id = requireStringParam(req.params.id, "Patient ID");
   const userId = req.user?.id as string;
-  const result = await PatientServices.updatePatient(id, userId, req.body);
+  const workspaceId = (req as any).workspaceId as string;
+  const result = await PatientServices.updatePatient(
+    id,
+    userId,
+    workspaceId,
+    req.body,
+  );
 
   sendResponse(res, {
     statusCode: Status.OK,
@@ -50,7 +57,8 @@ const updatePatient = catchAsync(async (req: Request, res: Response) => {
 const deletePatient = catchAsync(async (req: Request, res: Response) => {
   const id = requireStringParam(req.params.id, "Patient ID");
   const userId = req.user?.id as string;
-  await PatientServices.deletePatient(id, userId);
+  const workspaceId = (req as any).workspaceId as string;
+  await PatientServices.deletePatient(id, userId, workspaceId);
 
   sendResponse(res, {
     statusCode: Status.OK,
@@ -84,7 +92,8 @@ const searchPatients = catchAsync(async (req: Request, res: Response) => {
 
 const getPatientTimeline = catchAsync(async (req: Request, res: Response) => {
   const id = requireStringParam(req.params.id, "Patient ID");
-  const result = await PatientServices.getPatientTimeline(id);
+  const workspaceId = (req as any).workspaceId as string;
+  const result = await PatientServices.getPatientTimeline(id, workspaceId);
 
   sendResponse(res, {
     statusCode: Status.OK,
