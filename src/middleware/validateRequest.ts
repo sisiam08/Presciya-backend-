@@ -18,6 +18,11 @@ const validateRequest = (schema: ZodObject) => {
     await schema.parseAsync({
       body: req.body,
       cookies: req.cookies,
+      // Query/params are passed through so schemas may validate them. Zod
+      // strips keys a schema does not declare, so existing body-only schemas
+      // are unaffected.
+      query: req.query,
+      params: req.params,
     });
 
     next();

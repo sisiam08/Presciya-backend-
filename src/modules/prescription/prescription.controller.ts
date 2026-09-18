@@ -4,7 +4,12 @@ import { PrescriptionServices } from "./prescription.service";
 import sendResponse from "../../utils/sendResponse";
 import { Status } from "../../errors/httpStatus";
 import { requireStringParam } from "../../utils/requestParams";
-import { WorkspaceRole, WorkspaceType } from "../../../generated/prisma/enums";
+import {
+  WorkspaceRole,
+  WorkspaceType,
+  PrescriptionLanguage,
+  PrescriptionDesignTemplate,
+} from "../../../generated/prisma/enums";
 
 const createPrescription = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.id as string;
@@ -164,6 +169,24 @@ const previewPrescription = catchAsync(async (req: Request, res: Response) => {
   res.status(Status.OK).send(html);
 });
 
+const previewTemplateSample = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.user?.id as string;
+  const workspaceId = (req as any).workspaceId as string;
+  const template = req.query.template as PrescriptionDesignTemplate;
+  const language =
+    (req.query.language as PrescriptionLanguage) ?? PrescriptionLanguage.ENGLISH;
+
+  const html = await PrescriptionServices.previewTemplateSample(
+    userId,
+    workspaceId,
+    template,
+    language,
+  );
+
+  res.setHeader("Content-Type", "text/html");
+  res.status(Status.OK).send(html);
+});
+
 const verifyPrescription = catchAsync(async (req: Request, res: Response) => {
   const id = requireStringParam(req.params.id, "Prescription ID");
   const result = await PrescriptionServices.verifyPrescriptionPublic(id);
@@ -186,5 +209,6 @@ export const PrescriptionControllers = {
   amendPrescription,
   printPrescription,
   previewPrescription,
+  previewTemplateSample,
   verifyPrescription,
 };

@@ -2,6 +2,9 @@ export interface IPdfRenderData {
   id: string;
   createdAt: Date;
   status: string;
+  // Rendering choices frozen per prescription. Default to ENGLISH / DEFAULT.
+  language?: string | null;
+  template?: string | null;
   complaints?: string | null;
   diagnosis?: string | null;
   bloodPressure?: string | null;
@@ -9,6 +12,7 @@ export interface IPdfRenderData {
   temperature?: number | null;
   weight?: number | null;
   height?: string | null;
+  respiratoryRate?: number | null;
   clinicalNotes?: string | null;
   advises?: string | null;
   nextVisitDate?: Date | null;

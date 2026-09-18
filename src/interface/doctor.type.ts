@@ -1,3 +1,7 @@
+import {
+  PrescriptionLanguage,
+  PrescriptionDesignTemplate,
+} from "../../generated/prisma/enums";
 import { IContactType } from "./contact.type";
 
 export interface IUpdateDoctorProfile {
@@ -10,6 +14,9 @@ export interface IUpdateDoctorProfile {
   registrationNo?: string;
   signature?: string;
   signatureUrl?: string;
+  // Prescription rendering defaults (Settings → Prescription).
+  prescriptionLanguage?: PrescriptionLanguage;
+  prescriptionTemplate?: PrescriptionDesignTemplate;
 }
 
 export interface IAssignDoctor {

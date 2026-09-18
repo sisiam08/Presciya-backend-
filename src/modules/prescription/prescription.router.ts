@@ -37,6 +37,20 @@ router.get(
   PrescriptionControllers.getMyPrescriptions,
 );
 
+// Settings: render a sample prescription for a template + language. Declared
+// before "/:id" so it is not swallowed by the id route.
+router.get(
+  "/template-preview",
+  authWorkspace([
+    WorkspaceRole.DOCTOR,
+    WorkspaceRole.OWNER,
+    WorkspaceRole.ASSISTANT,
+    WorkspaceRole.MANAGER,
+  ]) as any,
+  validateRequest(PrescriptionValidation.previewTemplateSampleSchema),
+  PrescriptionControllers.previewTemplateSample,
+);
+
 // Authenticated A4 preview (draft or finalized) — canonical print layout
 router.get(
   "/:id/preview",

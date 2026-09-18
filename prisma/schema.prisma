@@ -92,6 +92,24 @@ enum MealTiming {
   ANYTIME
 }
 
+// Prescription rendering language. Only the doctor's instructions, advice,
+// next-visit label and medicine meal-timing labels are translated.
+enum PrescriptionLanguage {
+  ENGLISH
+  BANGLA
+}
+
+// Visual layout of a prescription. All templates share the same data model;
+// only presentation changes. Named "Design" to avoid clashing with the
+// PrescriptionTemplate model (saved medicine templates, Section 13.6).
+enum PrescriptionDesignTemplate {
+  DEFAULT
+  MODERN_CLINICAL
+  MINIMAL_PROFESSIONAL
+  MODERN_MEDICAL
+  ELEGANT_COMPACT
+}
+
 enum AppointmentStatus {
   PENDING
   CONFIRMED
@@ -249,6 +267,11 @@ model Doctor {
 
   verificationStatus VerificationStatus @default(PENDING)
   verificationType   VerificationType   @default(PERSONAL)
+
+  // Prescription rendering defaults chosen by the doctor in Settings. New
+  // prescriptions copy these; finalized prescriptions keep their own copy.
+  prescriptionLanguage PrescriptionLanguage @default(ENGLISH)
+  prescriptionTemplate PrescriptionDesignTemplate @default(DEFAULT)
 
   verifiedAt DateTime?
 
@@ -513,6 +536,14 @@ model Prescription {
   status        PrescriptionStatus @default(DRAFT)
   serialNumber  String? // human-readable serial assigned on finalization
   verificationCode String? @unique // opaque, public-facing verification identifier (Section 15)
+
+  // Rendering snapshot. The language and template are frozen per prescription
+  // so a historical record never changes when the doctor updates settings.
+  language PrescriptionLanguage @default(ENGLISH)
+  template PrescriptionDesignTemplate @default(DEFAULT)
+  // Frozen doctor/chamber branding captured on finalization so later profile
+  // or chamber edits cannot rewrite an already-issued prescription.
+  renderSnapshot Json?
 
   // Correction/versioning (Section 13.4): a finalized prescription is never
   // mutated; corrections create a new draft that supersedes it.

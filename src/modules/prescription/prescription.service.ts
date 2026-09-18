@@ -4,6 +4,8 @@ import { createAppError } from "../../errors/appError";
 import { Status } from "../../errors/httpStatus";
 import {
   PrescriptionStatus,
+  PrescriptionLanguage,
+  PrescriptionDesignTemplate,
   WorkspaceRole,
   WorkspaceType,
   VerificationStatus,
@@ -13,6 +15,7 @@ import {
 import config from "../../config";
 import { AuditService } from "../audit/audit.service";
 import { generatePrescriptionHtml } from "../../utils/pdfGenerator";
+import { IPdfRenderData } from "../../interface/pdf.type";
 import { FeatureServices } from "../feature/feature.service";
 import { Workspace } from "../../../generated/prisma/client";
 import { checkUserVerification } from "../../utils/verificationCheck";
@@ -37,6 +40,9 @@ const createPrescription = async (
     nextVisitDate?: string;
     medicines: any[];
     status?: PrescriptionStatus;
+    // Optional per-prescription overrides; default to the doctor's settings.
+    language?: PrescriptionLanguage;
+    template?: PrescriptionDesignTemplate;
   },
 ) => {
   // Check if user is verified to perform this action
@@ -61,6 +67,17 @@ const createPrescription = async (
   if (!doctor) {
     throw createAppError("Doctor profile not found", Status.NOT_FOUND);
   }
+
+  // Freeze the rendering choice for this prescription. Explicit request values
+  // win; otherwise inherit the doctor's Settings defaults.
+  const language =
+    prescriptionData.language ??
+    doctor.prescriptionLanguage ??
+    PrescriptionLanguage.ENGLISH;
+  const template =
+    prescriptionData.template ??
+    doctor.prescriptionTemplate ??
+    PrescriptionDesignTemplate.DEFAULT;
 
   // BOLA/IDOR: the patient and chamber must belong to the active workspace,
   // never trust client-supplied IDs at face value.
@@ -101,6 +118,8 @@ const createPrescription = async (
           ? new Date(prescriptionData.nextVisitDate)
           : null,
         status: prescriptionData.status ?? PrescriptionStatus.DRAFT,
+        language,
+        template,
       },
     });
 
@@ -530,13 +549,45 @@ const compileHtmlPrescription = async (
       ? prescription.clinicalObservations[0]
       : null;
 
+  // A finalized prescription carries a frozen branding snapshot so later
+  // doctor/chamber edits cannot rewrite an already-issued document.
+  const snapshot = (prescription.renderSnapshot ?? null) as {
+    doctor?: IPdfRenderData["doctor"];
+    chamber?: IPdfRenderData["chamber"];
+  } | null;
+
+  const liveDoctor: IPdfRenderData["doctor"] = {
+    name: prescription.doctor?.name || "",
+    qualification: doctorProfile?.qualifications || "",
+    specialization: doctorProfile?.specialization || "",
+    registrationNo: doctorProfile?.bmdcNumber || "",
+    signature: doctorProfile?.signatureUrl || "",
+    bmdcApproved:
+      doctorProfile?.verificationStatus === VerificationStatus.APPROVED,
+  };
+
+  const liveChamber: IPdfRenderData["chamber"] = prescription.chamber
+    ? {
+        chamberName: prescription.chamber.name,
+        chamberAddress: prescription.chamber.address || "",
+        chamberEmail: prescription.chamber.email,
+        logo: prescription.chamber.logo,
+        chamberSlogan: prescription.chamber.footerText,
+        templateConfig: prescription.chamber.templateConfig,
+        chamberPhone:
+          prescription.chamber.contactNumbers?.map((cn) => cn.phone) || [],
+      }
+    : null;
+
   // Structure render data matching IPdfRenderData interface
-  const renderData = {
+  const renderData: IPdfRenderData = {
     id: prescription.id,
     serialNumber: prescription.serialNumber || "",
     verificationCode: prescription.verificationCode,
     createdAt: prescription.createdAt,
     status: prescription.status,
+    language: prescription.language,
+    template: prescription.template,
     complaints: prescription.complaints,
     diagnosis: prescription.diagnosis,
     // Vitals from ClinicalObservation table
@@ -555,28 +606,12 @@ const compileHtmlPrescription = async (
     clinicalNotes: prescription.clinicalNotes,
     advises: prescription.advises,
     nextVisitDate: prescription.nextVisitDate,
-    medicines: prescription.prescriptionMedicines,
-    doctor: {
-      name: prescription.doctor?.name || "",
-      qualification: doctorProfile?.qualifications || "",
-      specialization: doctorProfile?.specialization || "",
-      registrationNo: doctorProfile?.bmdcNumber || "",
-      signature: doctorProfile?.signatureUrl || "",
-      bmdcApproved:
-        doctorProfile?.verificationStatus === VerificationStatus.APPROVED,
-    },
-    chamber: prescription.chamber
-      ? {
-          chamberName: prescription.chamber.name,
-          chamberAddress: prescription.chamber.address || "",
-          chamberEmail: prescription.chamber.email,
-          logo: prescription.chamber.logo,
-          chamberSlogan: prescription.chamber.footerText,
-          templateConfig: prescription.chamber.templateConfig,
-          chamberPhone:
-            prescription.chamber.contactNumbers?.map((cn) => cn.phone) || [],
-        }
-      : null,
+    // ROOT CAUSE FIX: the renderer expects brandName/generic/strength/type but
+    // PrescriptionMedicine stores them as snapshot* columns. Normalise here so
+    // medicine names always reach the template.
+    medicines: prescription.prescriptionMedicines.map(toRenderMedicine),
+    doctor: snapshot?.doctor ?? liveDoctor,
+    chamber: snapshot?.chamber ?? liveChamber,
     patient: {
       name: prescription.patient.name,
       age: prescription.patient.age,
@@ -634,6 +669,40 @@ const mapMedicineRelation = (prescriptionId: string, med: any) => ({
   customScheduleJson: med.customScheduleJson ?? null,
 });
 
+/**
+ * Maps a stored PrescriptionMedicine row to the render shape the prescription
+ * templates expect. PrescriptionMedicine persists medicine text in snapshot*
+ * columns, while the renderer reads brandName/generic/strength/type — this is
+ * the single place that bridges the two, shared by preview, print and PDF.
+ */
+const toRenderMedicine = (m: any) => ({
+  medicineId: m.medicineId,
+  brandName: m.snapshotBrandName,
+  generic: m.snapshotGeneric,
+  strength: m.snapshotStrength,
+  type: m.snapshotType,
+  usageType: m.usageType,
+  dosagePattern: m.dosagePattern,
+  frequency: m.frequency,
+  intervalDays: m.intervalDays,
+  duration: m.duration,
+  mealTiming: m.mealTiming,
+  instruction: m.instruction,
+  notes: m.notes,
+  quantity: m.quantity,
+  dose: m.dose,
+  frequencyMorning: m.frequencyMorning,
+  frequencyNoon: m.frequencyNoon,
+  frequencyNight: m.frequencyNight,
+  durationValue: m.durationValue,
+  durationUnit: m.durationUnit,
+  applicationAmount: m.applicationAmount,
+  applicationArea: m.applicationArea,
+  applicationFrequency: m.applicationFrequency,
+  specificDays: m.specificDays,
+  customScheduleJson: m.customScheduleJson,
+});
+
 // Finalize a draft prescription (locks it, assigns serial number)
 const finalizePrescription = async (
   prescriptionId: string,
@@ -646,7 +715,13 @@ const finalizePrescription = async (
 
   const existing = await prisma.prescription.findUnique({
     where: { id: prescriptionId, isDeleted: false },
-    select: { id: true, workspaceId: true, status: true, chamberId: true },
+    select: {
+      id: true,
+      workspaceId: true,
+      status: true,
+      chamberId: true,
+      doctorUserId: true,
+    },
   });
 
   if (!existing) {
@@ -674,6 +749,44 @@ const finalizePrescription = async (
     );
   }
 
+  // Freeze the branding used on this document so later profile/chamber edits
+  // never rewrite an issued prescription (historical accuracy).
+  const [creator, doctorProfile, chamber] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: existing.doctorUserId },
+      select: { name: true },
+    }),
+    prisma.doctor.findUnique({ where: { userId: existing.doctorUserId } }),
+    prisma.chamber.findUnique({
+      where: { id: existing.chamberId },
+      include: { contactNumbers: true },
+    }),
+  ]);
+
+  const renderSnapshot = {
+    doctor: {
+      name: creator?.name || doctorProfile?.name || "",
+      qualification: doctorProfile?.qualifications || "",
+      specialization: doctorProfile?.specialization || "",
+      registrationNo: doctorProfile?.bmdcNumber || "",
+      signature: doctorProfile?.signatureUrl || "",
+      bmdcApproved:
+        doctorProfile?.verificationStatus === VerificationStatus.APPROVED,
+    },
+    chamber: chamber
+      ? {
+          chamberName: chamber.name,
+          chamberAddress: chamber.address || "",
+          chamberEmail: chamber.email,
+          logo: chamber.logo,
+          chamberSlogan: chamber.footerText,
+          templateConfig: chamber.templateConfig,
+          chamberPhone:
+            chamber.contactNumbers?.map((cn) => cn.phone) || [],
+        }
+      : null,
+  };
+
   // Assign serial number (unique). Retry on the rare concurrent-collision case.
   let prescription: any = null;
   for (let attempt = 0; attempt < 3 && !prescription; attempt++) {
@@ -694,6 +807,7 @@ const finalizePrescription = async (
             status: PrescriptionStatus.FINALIZED,
             serialNumber,
             verificationCode: generateVerificationCode(),
+            renderSnapshot: renderSnapshot as any,
           },
           include: {
             patient: { select: { name: true, phone: true } },
@@ -967,8 +1081,125 @@ const amendPrescription = async (
   return fullRevision ?? revision;
 };
 
+/**
+ * Renders a realistic sample prescription for the given template + language so
+ * the Settings template picker previews the EXACT same renderer used for real
+ * prescriptions (never a divergent fake preview).
+ */
+const previewTemplateSample = async (
+  userId: string,
+  workspaceId: string,
+  template: PrescriptionDesignTemplate,
+  language: PrescriptionLanguage,
+): Promise<string> => {
+  const [user, doctorProfile, chamber] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { name: true } }),
+    prisma.doctor.findUnique({ where: { userId } }),
+    prisma.chamber.findFirst({
+      where: { workspaceId },
+      include: { contactNumbers: true },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
+
+  const renderData: IPdfRenderData = {
+    id: "SAMPLE-PRESCRIPTION",
+    serialNumber: "PRS-SAMPLE-000001",
+    verificationCode: "sample-verification-code",
+    createdAt: new Date(),
+    status: "FINALIZED",
+    language,
+    template,
+    complaints: "Fever and headache for 3 days",
+    diagnosis: "Acute viral fever",
+    bloodPressure: "120/80",
+    pulse: 82,
+    temperature: 101.2,
+    weight: 68,
+    height: "172 cm",
+    clinicalNotes: "Drink plenty of water and take complete rest.",
+    advises:
+      "Complete the full course. Return if the fever persists beyond 3 days.",
+    nextVisitDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    medicines: [
+      {
+        brandName: "Napa",
+        generic: "Paracetamol",
+        strength: "500 mg",
+        type: "Tablet",
+        usageType: "DAILY",
+        dosagePattern: "1+0+1",
+        mealTiming: "AFTER_MEAL",
+        duration: "7 days",
+        instruction: "Take after meals with plenty of water.",
+      },
+      {
+        brandName: "Seclo",
+        generic: "Omeprazole",
+        strength: "20 mg",
+        type: "Capsule",
+        usageType: "DAILY",
+        dosagePattern: "1+0+0",
+        mealTiming: "BEFORE_MEAL",
+        duration: "7 days",
+      },
+      {
+        brandName: "Monas",
+        generic: "Montelukast",
+        strength: "10 mg",
+        type: "Tablet",
+        usageType: "DAILY",
+        dosagePattern: "0+0+1",
+        mealTiming: "AFTER_MEAL",
+        duration: "14 days",
+      },
+    ],
+    doctor: {
+      name: user?.name || doctorProfile?.name || "Dr. Sample",
+      qualification: doctorProfile?.qualifications || "MBBS, FCPS (Medicine)",
+      specialization: doctorProfile?.specialization || "Internal Medicine",
+      registrationNo: doctorProfile?.bmdcNumber || "A-123456",
+      signature: doctorProfile?.signatureUrl || null,
+      bmdcApproved:
+        doctorProfile?.verificationStatus === VerificationStatus.APPROVED,
+    },
+    chamber: chamber
+      ? {
+          chamberName: chamber.name,
+          chamberAddress: chamber.address || "Dhaka, Bangladesh",
+          chamberEmail: chamber.email,
+          logo: chamber.logo,
+          chamberSlogan: chamber.footerText,
+          templateConfig: chamber.templateConfig,
+          chamberPhone: chamber.contactNumbers?.map((cn) => cn.phone) || [],
+        }
+      : {
+          chamberName: "Presciya Sample Chamber",
+          chamberAddress: "Dhanmondi, Dhaka",
+          chamberEmail: null,
+          logo: null,
+          chamberSlogan: "Caring for you",
+          templateConfig: null,
+          chamberPhone: [{ phone: "+880 1700-000000" }],
+        },
+    patient: {
+      name: "Md. Rahim Uddin",
+      age: 35,
+      gender: "MALE",
+      phone: "01711111111",
+      bloodGroup: "B+",
+      allergies: "None known",
+      chronicDiseases: "None",
+      patientIdentifier: "P-000123",
+    },
+  };
+
+  return generatePrescriptionHtml(renderData);
+};
+
 export const PrescriptionServices = {
   createPrescription,
+  previewTemplateSample,
   getPrescriptionById,
   updatePrescription,
   deletePrescription,

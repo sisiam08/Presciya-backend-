@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  PrescriptionLanguage,
+  PrescriptionDesignTemplate,
+} from "../../../generated/prisma/enums";
 
 const StructuredMedicineSchema = z.object({
   medicineId: z.string().uuid().optional(),
@@ -57,6 +61,9 @@ const createPrescriptionSchema = z.object({
       .array(StructuredMedicineSchema)
       .min(1, "At least one medicine is required"),
     status: z.enum(["DRAFT", "FINALIZED", "CANCELLED"]).optional(),
+    // Rendering choices. Never trust arbitrary strings — only known enum values.
+    language: z.nativeEnum(PrescriptionLanguage).optional(),
+    template: z.nativeEnum(PrescriptionDesignTemplate).optional(),
   }),
 });
 
@@ -77,10 +84,21 @@ const updatePrescriptionSchema = z.object({
     nextVisitDate: z.string().optional(),
     medicines: z.array(StructuredMedicineSchema).optional(),
     status: z.enum(["DRAFT", "FINALIZED", "CANCELLED"]).optional(),
+    language: z.nativeEnum(PrescriptionLanguage).optional(),
+    template: z.nativeEnum(PrescriptionDesignTemplate).optional(),
+  }),
+});
+
+// Settings template picker: render a sample for a specific template + language.
+const previewTemplateSampleSchema = z.object({
+  query: z.object({
+    template: z.nativeEnum(PrescriptionDesignTemplate),
+    language: z.nativeEnum(PrescriptionLanguage).optional(),
   }),
 });
 
 export const PrescriptionValidation = {
   createPrescriptionSchema,
   updatePrescriptionSchema,
+  previewTemplateSampleSchema,
 };

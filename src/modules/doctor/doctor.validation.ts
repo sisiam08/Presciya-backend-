@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { ContactLabel } from "../../../generated/prisma/enums";
+import {
+  ContactLabel,
+  PrescriptionLanguage,
+  PrescriptionDesignTemplate,
+} from "../../../generated/prisma/enums";
 import config from "../../config";
 
 const AssignDoctorSchema = z.object({
@@ -42,6 +46,9 @@ const UpdateDoctorProfileSchema = z.object({
       .regex(/^A-?\d{4,7}$/i, "Registration number must be like A-123456")
       .optional(),
     signature: z.string().optional(),
+    // Prescription rendering defaults (Settings → Prescription).
+    prescriptionLanguage: z.nativeEnum(PrescriptionLanguage).optional(),
+    prescriptionTemplate: z.nativeEnum(PrescriptionDesignTemplate).optional(),
   }),
 });
 

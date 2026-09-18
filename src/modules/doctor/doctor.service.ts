@@ -212,6 +212,10 @@ const updateDoctorProfile = async (
     doctorFields.specialization = data.specialization;
   if (designation !== undefined) doctorFields.designation = designation;
   if (signatureUrl) doctorFields.signatureUrl = signatureUrl;
+  if (data.prescriptionLanguage !== undefined)
+    doctorFields.prescriptionLanguage = data.prescriptionLanguage;
+  if (data.prescriptionTemplate !== undefined)
+    doctorFields.prescriptionTemplate = data.prescriptionTemplate;
 
   // Get old values for audit logging
   const oldDoctor = await prisma.doctor.findUnique({
