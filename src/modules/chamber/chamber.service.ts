@@ -268,6 +268,7 @@ const deleteChamberSchedule = async (scheduleId: string) => {
 };
 
 const createAppointment = async (
+  workspaceId: string,
   chamberId: string,
   appointmentData: {
     doctorId: string;
@@ -280,12 +281,21 @@ const createAppointment = async (
     throw createAppError("Invalid appointment date", Status.BAD_REQUEST);
   }
 
-  const chamber = await prisma.chamber.findUnique({
-    where: { id: chamberId },
+  // BOLA/IDOR: the chamber and patient must belong to the active workspace.
+  const chamber = await prisma.chamber.findFirst({
+    where: { id: chamberId, workspaceId },
   });
 
   if (!chamber) {
-    throw createAppError("Chamber not found", Status.NOT_FOUND);
+    throw createAppError("Chamber not found in workspace", Status.NOT_FOUND);
+  }
+
+  const patient = await prisma.patient.findFirst({
+    where: { id: appointmentData.patientId, workspaceId, isDeleted: false },
+  });
+
+  if (!patient) {
+    throw createAppError("Patient not found in workspace", Status.NOT_FOUND);
   }
 
   // Chamber schedules store full weekday names (e.g. "SATURDAY")
@@ -303,54 +313,88 @@ const createAppointment = async (
     .toUpperCase();
   const dayOfWeek = DAY_MAP[shortDay] ?? shortDay;
 
-  return await prisma.$transaction(async (tx) => {
-    // Enforce daily capacity from chamber schedule
-    const schedule = await tx.chamberSchedule.findFirst({
-      where: { chamberId, dayOfWeek },
-      select: { maxSerials: true },
-    });
+  // Retry on unique-serial collisions so concurrent bookings never double-book
+  // (Section 16.2).
+  let appointment: any = null;
 
-    const capacity = schedule?.maxSerials ?? null;
+  for (let attempt = 0; attempt < 5 && !appointment; attempt++) {
+    try {
+      appointment = await prisma.$transaction(async (tx) => {
+        // Enforce daily capacity from chamber schedule
+        const schedule = await tx.chamberSchedule.findFirst({
+          where: { chamberId, dayOfWeek },
+          select: { maxSerials: true },
+        });
 
-    const lastAppointment = await tx.appointment.findFirst({
-      where: {
-        chamberId,
-        doctorId: appointmentData.doctorId,
-        appointmentDate: dateObj,
-      },
-      orderBy: {
-        serialNo: "desc",
-      },
-    });
+        const capacity = schedule?.maxSerials ?? null;
 
-    const nextSerial = lastAppointment ? lastAppointment.serialNo + 1 : 1;
+        const lastAppointment = await tx.appointment.findFirst({
+          where: {
+            chamberId,
+            doctorId: appointmentData.doctorId,
+            appointmentDate: dateObj,
+          },
+          orderBy: {
+            serialNo: "desc",
+          },
+        });
 
-    if (capacity !== null && nextSerial > capacity) {
-      throw createAppError(
-        `No slots available. The chamber's daily capacity of ${capacity} appointments for ${dayOfWeek} has been reached.`,
-        Status.CONFLICT,
-      );
+        const nextSerial =
+          (lastAppointment ? lastAppointment.serialNo + 1 : 1) + attempt;
+
+        if (capacity !== null && nextSerial > capacity) {
+          throw createAppError(
+            `No slots available. The chamber's daily capacity of ${capacity} appointments for ${dayOfWeek} has been reached.`,
+            Status.CONFLICT,
+          );
+        }
+
+        return tx.appointment.create({
+          data: {
+            chamberId,
+            doctorId: appointmentData.doctorId,
+            patientId: appointmentData.patientId,
+            appointmentDate: dateObj,
+            serialNo: nextSerial,
+            status: AppointmentStatus.PENDING,
+          },
+          include: {
+            patient: true,
+            doctor: true,
+            chamber: true,
+          },
+        });
+      });
+    } catch (err) {
+      if ((err as { code?: string }).code !== "P2002") throw err;
     }
+  }
 
-    return tx.appointment.create({
-      data: {
-        chamberId,
-        doctorId: appointmentData.doctorId,
-        patientId: appointmentData.patientId,
-        appointmentDate: dateObj,
-        serialNo: nextSerial,
-        status: AppointmentStatus.PENDING,
-      },
-      include: {
-        patient: true,
-        doctor: true,
-        chamber: true,
-      },
-    });
-  });
+  if (!appointment) {
+    throw createAppError(
+      "Could not book the appointment due to a slot conflict. Please try again.",
+      Status.CONFLICT,
+    );
+  }
+
+  return appointment;
 };
 
-const getChamberAppointments = async (chamberId: string, date?: string) => {
+const getChamberAppointments = async (
+  workspaceId: string,
+  chamberId: string,
+  date?: string,
+) => {
+  // BOLA/IDOR: verify the chamber belongs to the active workspace first.
+  const chamber = await prisma.chamber.findFirst({
+    where: { id: chamberId, workspaceId },
+    select: { id: true },
+  });
+
+  if (!chamber) {
+    throw createAppError("Chamber not found in workspace", Status.NOT_FOUND);
+  }
+
   const filterDate = date ? new Date(date) : new Date();
 
   return await prisma.appointment.findMany({

@@ -15,11 +15,13 @@ const create = catchAsync(async (req: Request, res: Response) => {
 
 const updateStatus = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.id as string;
+  const workspaceId = (req as any).workspaceId as string;
   const { id } = req.params as { id: string };
   const { status, cancelReason } = req.body;
   const updated = await AppointmentService.updateStatus(
     id,
     userId,
+    workspaceId,
     status,
     cancelReason,
   );

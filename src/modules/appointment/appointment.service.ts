@@ -61,44 +61,64 @@ const createAppointment = async (
     .toUpperCase(); // e.g. "MON"
   const dayOfWeek = DAY_MAP[shortDay] ?? shortDay;
 
-  const appointment = await prisma.$transaction(async (tx) => {
-    // Enforce daily capacity from chamber schedule
-    const schedule = await tx.chamberSchedule.findFirst({
-      where: { chamberId: data.chamberId, dayOfWeek },
-      select: { maxSerials: true },
-    });
+  // Serial numbers are generated inside a transaction and protected by the
+  // unique constraint (chamberId, doctorId, appointmentDate, serialNo). On a
+  // concurrent collision we retry with the next serial so no two patients are
+  // ever double-booked (Section 16.2).
+  let appointment: Awaited<ReturnType<typeof prisma.appointment.create>> | null =
+    null;
 
-    const capacity = schedule?.maxSerials ?? null;
+  for (let attempt = 0; attempt < 5 && !appointment; attempt++) {
+    try {
+      appointment = await prisma.$transaction(async (tx) => {
+        // Enforce daily capacity from chamber schedule
+        const schedule = await tx.chamberSchedule.findFirst({
+          where: { chamberId: data.chamberId, dayOfWeek },
+          select: { maxSerials: true },
+        });
 
-    const existingCount = await tx.appointment.count({
-      where: {
-        chamberId: data.chamberId,
-        doctorId: data.doctorId,
-        appointmentDate,
-      },
-    });
+        const capacity = schedule?.maxSerials ?? null;
 
-    if (capacity !== null && existingCount >= capacity) {
-      throw createAppError(
-        `No slots available. The chamber's daily capacity of ${capacity} appointments for ${dayOfWeek} has been reached.`,
-        Status.CONFLICT,
-      );
+        const existingCount = await tx.appointment.count({
+          where: {
+            chamberId: data.chamberId,
+            doctorId: data.doctorId,
+            appointmentDate,
+          },
+        });
+
+        if (capacity !== null && existingCount >= capacity) {
+          throw createAppError(
+            `No slots available. The chamber's daily capacity of ${capacity} appointments for ${dayOfWeek} has been reached.`,
+            Status.CONFLICT,
+          );
+        }
+
+        const serialNo = existingCount + 1 + attempt;
+
+        return tx.appointment.create({
+          data: {
+            chamberId: data.chamberId,
+            doctorId: data.doctorId,
+            patientId: data.patientId,
+            appointmentDate,
+            serialNo,
+            notes: data.notes ?? null,
+            status: AppointmentStatus.CONFIRMED,
+          },
+        });
+      });
+    } catch (err) {
+      if ((err as { code?: string }).code !== "P2002") throw err;
     }
+  }
 
-    const serialNo = existingCount + 1;
-
-    return tx.appointment.create({
-      data: {
-        chamberId: data.chamberId,
-        doctorId: data.doctorId,
-        patientId: data.patientId,
-        appointmentDate,
-        serialNo,
-        notes: data.notes ?? null,
-        status: AppointmentStatus.CONFIRMED,
-      },
-    });
-  });
+  if (!appointment) {
+    throw createAppError(
+      "Could not book the appointment due to a slot conflict. Please try again.",
+      Status.CONFLICT,
+    );
+  }
 
   await AuditService.logAudit({
     userId,
@@ -133,6 +153,7 @@ const createAppointment = async (
 const updateStatus = async (
   appointmentId: string,
   userId: string,
+  workspaceId: string,
   status: AppointmentStatus,
   cancelReason?: string,
 ) => {
@@ -141,13 +162,16 @@ const updateStatus = async (
 
   const appt = await prisma.appointment.findUnique({
     where: { id: appointmentId },
+    include: { chamber: { select: { workspaceId: true } } },
   });
   if (!appt) throw createAppError("Appointment not found", Status.NOT_FOUND);
 
-  const chamber = await prisma.chamber.findUnique({
-    where: { id: appt.chamberId },
-    select: { workspaceId: true },
-  });
+  // BOLA/IDOR: the appointment must belong to the caller's active workspace.
+  if (appt.chamber.workspaceId !== workspaceId) {
+    throw createAppError("Appointment not found", Status.NOT_FOUND);
+  }
+
+  const chamber = appt.chamber;
 
   const updated = await prisma.appointment.update({
     where: { id: appointmentId },

@@ -96,7 +96,12 @@ const deleteChamberSchedule = catchAsync(async (req: Request, res: Response) => 
 
 const createAppointment = catchAsync(async (req: Request, res: Response) => {
   const id = req.params.id as string;
-  const result = await ChamberServices.createAppointment(id, req.body);
+  const workspaceId = (req as any).workspaceId as string;
+  const result = await ChamberServices.createAppointment(
+    workspaceId,
+    id,
+    req.body,
+  );
 
   sendResponse(res, {
     statusCode: Status.CREATED,
@@ -108,8 +113,13 @@ const createAppointment = catchAsync(async (req: Request, res: Response) => {
 
 const getChamberAppointments = catchAsync(async (req: Request, res: Response) => {
   const id = req.params.id as string;
+  const workspaceId = (req as any).workspaceId as string;
   const { date } = req.query;
-  const result = await ChamberServices.getChamberAppointments(id, date as string);
+  const result = await ChamberServices.getChamberAppointments(
+    workspaceId,
+    id,
+    date as string,
+  );
 
   sendResponse(res, {
     statusCode: Status.OK,
