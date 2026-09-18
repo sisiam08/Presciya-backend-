@@ -35,8 +35,36 @@ export const adminService = {  // User management
     });
   },
 
+  // Soft delete / deactivate (Section 8.2). A hard delete is not allowed: the
+  // user owns workspaces and is referenced by prescriptions, profiles, etc., so
+  // we deactivate the account, revoke sessions and set memberships inactive —
+  // all business records are preserved.
   async deleteUser(id: string) {
-    return prisma.user.delete({ where: { id } });
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!user) {
+      return { id, deactivated: false };
+    }
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id },
+        data: { isActive: false },
+      }),
+      prisma.session.updateMany({
+        where: { userId: id },
+        data: { isActive: false },
+      }),
+      prisma.membership.updateMany({
+        where: { userId: id },
+        data: { status: "INACTIVE" },
+      }),
+    ]);
+
+    return { id, deactivated: true };
   },
 
   // Subscription plan feature limits

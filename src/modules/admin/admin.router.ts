@@ -44,8 +44,8 @@ router.delete(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params as { id: string };
-      await adminService.deleteUser(id);
-      res.status(204).send();
+      const result = await adminService.deleteUser(id);
+      res.json(result);
     } catch (err) {
       next(err);
     }
