@@ -77,7 +77,7 @@ Detail/management surface only: `GET /list/:institutionId`, `GET /:id`, `PUT /:i
 `GET /dashboard` (doctor or institution scoped).
 
 ### Verification `/verification`
-`POST /submit`, `GET /pending` (super admin), `GET /:id` (owner or super admin), `POST /:id/under-review|approve|reject` (super admin). State machine: `PENDING → UNDER_REVIEW → APPROVED|REJECTED → (resubmission) PENDING`.
+`POST /documents` (owner; uploads evidence to **private** Cloudinary storage and returns opaque references), `POST /submit`, `GET /pending` (super admin), `GET /:id` (owner or super admin; returns short-lived signed URLs for documents), `POST /:id/under-review|approve|reject` (super admin). State machine: `PENDING → UNDER_REVIEW → APPROVED|REJECTED → (resubmission) PENDING`.
 
 ### Departments `/departments`
 `POST /`, `GET /institution/:institutionId`, `GET /:id`, `PUT /:id`, `DELETE /:id`. Shares one write path with `institution/departments`.

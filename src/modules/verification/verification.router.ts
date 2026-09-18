@@ -2,8 +2,20 @@ import express from "express";
 import { VerificationController } from "./verification.controller";
 import { auth, authRole } from "../../middleware/auth";
 import { SystemRole } from "../../../generated/prisma/enums";
+import { upload } from "../../config/multer.config";
 
 const router = express.Router();
+
+/**
+ * Upload verification evidence to private storage (owner only)
+ * POST /api/verification/documents
+ */
+router.post(
+  "/documents",
+  auth(),
+  upload.array("documents", 5),
+  VerificationController.uploadDocuments,
+);
 
 /**
  * Submit verification request (owner of the profile)

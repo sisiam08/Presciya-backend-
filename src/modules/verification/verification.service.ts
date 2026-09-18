@@ -11,6 +11,69 @@ import {
 } from "../../../generated/prisma/enums";
 import { AuditService } from "../audit/audit.service";
 import { NotificationServices } from "../notification/notification.service";
+import {
+  uploadPrivateFileToCloudinary,
+  getSignedPrivateUrl,
+} from "../../config/cloudinary.config";
+
+/**
+ * Uploads verification evidence to private storage and returns opaque
+ * references (public id/format) — never a public URL (Section 21).
+ */
+const uploadVerificationDocuments = async (files: Express.Multer.File[]) => {
+  if (!files || files.length === 0) {
+    throw createAppError(
+      "At least one document is required",
+      Status.BAD_REQUEST,
+    );
+  }
+
+  const uploaded: {
+    publicId: string;
+    format?: string;
+    resourceType: string;
+    originalName: string;
+    bytes: number;
+  }[] = [];
+
+  for (const file of files) {
+    const result = await uploadPrivateFileToCloudinary(
+      file.buffer,
+      file.originalname,
+    );
+    uploaded.push({
+      publicId: result.public_id,
+      format: result.format,
+      resourceType: result.resource_type,
+      originalName: file.originalname,
+      bytes: result.bytes,
+    });
+  }
+
+  return uploaded;
+};
+
+/**
+ * Generates short-lived signed URLs for any private documents referenced in a
+ * verification request's submitted data. Only returned to the owner or a
+ * super admin.
+ */
+const buildSignedDocuments = (submittedData: unknown) => {
+  const docs = (submittedData as { documents?: unknown })?.documents;
+  if (!Array.isArray(docs)) return undefined;
+
+  return docs.map((doc: any) => ({
+    originalName: doc?.originalName ?? null,
+    url:
+      doc?.publicId && doc?.format
+        ? getSignedPrivateUrl(
+            doc.publicId,
+            doc.format,
+            doc.resourceType ?? "image",
+          )
+        : null,
+  }));
+};
 
 /**
  * Submit a verification request for doctor or institution
@@ -179,7 +242,12 @@ const getRequestDetails = async (requestId: string) => {
       },
     });
 
-    return { ...request, profile: doctor, profileType: "doctor" };
+    return {
+      ...request,
+      profile: doctor,
+      profileType: "doctor",
+      documents: buildSignedDocuments(request.submittedData),
+    };
   } else {
     const institution = await prisma.institution.findUnique({
       where: { userId: request.userId },
@@ -191,7 +259,12 @@ const getRequestDetails = async (requestId: string) => {
       },
     });
 
-    return { ...request, profile: institution, profileType: "institution" };
+    return {
+      ...request,
+      profile: institution,
+      profileType: "institution",
+      documents: buildSignedDocuments(request.submittedData),
+    };
   }
 };
 
@@ -428,6 +501,7 @@ const rejectRequest = async (
 };
 
 export const VerificationServices = {
+  uploadVerificationDocuments,
   submitVerificationRequest,
   getPendingRequests,
   getRequestDetails,

@@ -68,6 +68,21 @@ function globalErrorHandler(
       }
       errorMessage = `Duplicate entry! This ${fields} already exists.`;
     }
+  } else if (
+    err?.name === "MulterError" ||
+    (typeof err?.code === "string" && err.code.startsWith("LIMIT_"))
+  ) {
+    statusCode = 400;
+    errorMessage =
+      err.code === "LIMIT_FILE_SIZE"
+        ? "Uploaded file is too large."
+        : err.message || "Invalid file upload.";
+  } else if (
+    typeof err?.message === "string" &&
+    err.message.includes("File type not allowed")
+  ) {
+    statusCode = 400;
+    errorMessage = "File type not allowed. Allowed: JPEG, PNG, WEBP, PDF.";
   } else if (err instanceof Prisma.PrismaClientUnknownRequestError) {
     statusCode = 500;
     errorMessage = "Occured wrong query!";

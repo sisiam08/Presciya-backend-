@@ -53,6 +53,25 @@ export const submitVerificationRequest = catchAsync(
 );
 
 /**
+ * Upload verification evidence to private storage (owner only)
+ * POST /api/verification/documents
+ */
+export const uploadDocuments = catchAsync(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const files = (req.files as Express.Multer.File[]) || [];
+    const result = await VerificationServices.uploadVerificationDocuments(files);
+
+    sendResponse(res, {
+      statusCode: Status.CREATED,
+      success: true,
+      message:
+        "Documents uploaded securely. Include the returned references in submittedData.documents.",
+      data: result,
+    });
+  },
+);
+
+/**
  * Get pending verification requests (admin only)
  * GET /api/verification/pending
  */
@@ -247,6 +266,7 @@ export const rejectRequest = catchAsync(
 );
 
 export const VerificationController = {
+  uploadDocuments,
   submitVerificationRequest,
   getPendingRequests,
   getRequestDetails,
