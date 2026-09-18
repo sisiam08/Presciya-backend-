@@ -222,6 +222,7 @@ model User {
   contactNumbers               ContactNumber[]
   ownedWorkspaces              Workspace[]
   prescriptions                Prescription[]
+  prescriptionTemplates        PrescriptionTemplate[]
   subscriptions                Subscription[]
   loginHistories               LoginHistory[]
   reviewedVerificationRequests VerificationRequest[]
@@ -325,6 +326,7 @@ model Workspace {
   chambers       Chamber[]
   prescriptions  Prescription[]
   usageTrackings UsageTracking[]
+  templates      PrescriptionTemplate[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -541,6 +543,29 @@ model Prescription {
   @@index([doctorUserId])
   @@index([patientId])
   @@index([supersedesId])
+}
+
+model PrescriptionTemplate {
+  id String @id @default(uuid())
+
+  workspaceId  String
+  doctorUserId String
+
+  name        String
+  description String?
+  complaints  String?
+  advises     String?
+  medicinesJson Json // array of medicine payloads, copied into new prescriptions
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  doctor    User      @relation(fields: [doctorUserId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([doctorUserId])
+  @@map("prescription_templates")
 }
 
 model ClinicalObservation {

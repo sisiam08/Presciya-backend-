@@ -16,6 +16,7 @@ import verificationRouter from "../modules/verification/verification.router";
 import departmentRouter from "../modules/department/department.router";
 import institutionDoctorRouter from "../modules/institution/institution-doctor.router";
 import { NotificationRouters } from "../modules/notification/notification.router";
+import templateRouter from "../modules/template/template.router";
 
 const router = Router();
 
@@ -91,6 +92,10 @@ const routes: IRoute[] = [
   {
     path: "/notifications",
     route: NotificationRouters,
+  },
+  {
+    path: "/prescription-templates",
+    route: templateRouter,
   },
 ];
 
