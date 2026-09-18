@@ -99,8 +99,13 @@ export const generatePrescriptionHtml = (data: IPdfRenderData): string => {
     verifyUrl,
   )}`;
 
-  // Escape all basic doctor, chamber, and patient parameters for safe injection
-  const docName = escapeHtml(doctor.name);
+  // Escape all basic doctor, chamber, and patient parameters for safe injection.
+  // Avoid a doubled honorific when the stored name already starts with "Dr".
+  const rawDoctorName = (doctor.name || "").trim();
+  const doctorDisplayName = /^dr\.?\s/i.test(rawDoctorName)
+    ? rawDoctorName
+    : `Dr. ${rawDoctorName}`;
+  const docName = escapeHtml(doctorDisplayName);
   const docQualification = escapeHtml(doctor.qualification);
   const docSpecialization = escapeHtml(doctor.specialization);
   const docRegNo = escapeHtml(doctor.registrationNo);
@@ -601,7 +606,7 @@ export const generatePrescriptionHtml = (data: IPdfRenderData): string => {
     <!-- Double column header -->
     <div class="header">
       <div class="doctor-info">
-        <h1 class="doctor-name">Dr. ${docName}</h1>
+        <h1 class="doctor-name">${docName}</h1>
         <p class="doctor-qualification">${docQualification}</p>
         <p class="doctor-specialty">${docSpecialization}</p>
         ${docRegNo && doctor.bmdcApproved ? `<span class="doctor-reg">BMDC Reg No: ${docRegNo}</span>` : ""}
@@ -714,7 +719,7 @@ export const generatePrescriptionHtml = (data: IPdfRenderData): string => {
             ? `<img class="sig-image" src="${docSignature}" alt="Doctor Signature">`
             : `<div style="height: 50px;"></div>`
         }
-        <div class="sig-line">Dr. ${docName}</div>
+        <div class="sig-line">${docName}</div>
         <div style="font-size: 9px; color: #666666; margin-top: 2px;">Registered Practitioner</div>
       </div>
     </div>
