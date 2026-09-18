@@ -5,6 +5,7 @@ import {
   VerificationStatus,
   VerificationType,
 } from "../../../generated/prisma/enums";
+import { DepartmentServices } from "../department/department.service";
 
 type InstitutionProfileInput = {
   name?: string;
@@ -320,12 +321,11 @@ const createDepartment = async (
     throw createAppError("Institution profile not found", Status.NOT_FOUND);
   }
 
-  return await prisma.department.create({
-    data: {
-      institutionId: inst.id,
-      ...departmentData,
-    },
-  });
+  // Single shared write path with the standalone /departments module.
+  return await DepartmentServices.createDepartmentForInstitution(
+    inst.id,
+    departmentData,
+  );
 };
 
 const getDepartments = async (workspaceId: string) => {
@@ -339,9 +339,7 @@ const getDepartments = async (workspaceId: string) => {
     throw createAppError("Institution profile not found", Status.NOT_FOUND);
   }
 
-  return await prisma.department.findMany({
-    where: { institutionId: inst.id },
-  });
+  return await DepartmentServices.listDepartmentsForInstitution(inst.id);
 };
 
 const assignDoctor = async (

@@ -9,6 +9,51 @@ import { AuditService } from "../audit/audit.service";
 import { checkUserVerification } from "../../utils/verificationCheck";
 
 /**
+ * Low-level department creation. Shared by the workspace-scoped
+ * `institution/departments` surface and the standalone `/departments` module so
+ * there is exactly one write path (Section 10.2).
+ */
+const createDepartmentForInstitution = async (
+  institutionId: string,
+  data: {
+    name: string;
+    description?: string;
+  },
+) => {
+  return prisma.department.create({
+    data: {
+      institutionId,
+      name: data.name,
+      description: data.description ?? null,
+    },
+  });
+};
+
+/**
+ * Low-level department listing for an institution (with assigned doctors).
+ */
+const listDepartmentsForInstitution = async (institutionId: string) => {
+  return prisma.department.findMany({
+    where: { institutionId },
+    include: {
+      doctors: {
+        include: {
+          doctor: {
+            select: {
+              id: true,
+              name: true,
+              specialization: true,
+              verificationStatus: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+};
+
+/**
  * Create a new department in an institution
  */
 const createDepartment = async (
@@ -36,13 +81,10 @@ const createDepartment = async (
   }
 
   // Create department
-  const department = await prisma.department.create({
-    data: {
-      institutionId,
-      name: data.name,
-      description: data.description ?? null,
-    },
-  });
+  const department = await createDepartmentForInstitution(
+    institutionId,
+    data,
+  );
 
   // Audit: Log department creation
   await AuditService.logAudit({
@@ -67,24 +109,7 @@ const createDepartment = async (
  * Get all departments for an institution
  */
 const getDepartmentsByInstitution = async (institutionId: string) => {
-  return await prisma.department.findMany({
-    where: { institutionId },
-    include: {
-      doctors: {
-        include: {
-          doctor: {
-            select: {
-              id: true,
-              name: true,
-              specialization: true,
-              verificationStatus: true,
-            },
-          },
-        },
-      },
-    },
-    orderBy: { createdAt: "asc" },
-  });
+  return await listDepartmentsForInstitution(institutionId);
 };
 
 /**
@@ -251,6 +276,8 @@ const deleteDepartment = async (departmentId: string, userId: string) => {
 };
 
 export const DepartmentServices = {
+  createDepartmentForInstitution,
+  listDepartmentsForInstitution,
   createDepartment,
   getDepartmentsByInstitution,
   getDepartmentDetails,
