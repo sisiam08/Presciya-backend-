@@ -44,6 +44,7 @@ export const generatePrescriptionHtml = (data: IPdfRenderData): string => {
   const {
     id,
     serialNumber,
+    verificationCode,
     createdAt,
     complaints,
     diagnosis,
@@ -90,8 +91,10 @@ export const generatePrescriptionHtml = (data: IPdfRenderData): string => {
     chamber?.templateConfig?.disclaimer ||
     "This is a digitally generated prescription. Verify authenticity by scanning the QR code.";
 
-  // Verification URL
-  const verifyUrl = `${config.appUrl || "http://localhost:3000"}/verify/prescription/${id}`;
+  // Verification URL — use the opaque public code, never the raw DB id when a
+  // code exists (Section 15).
+  const verifyTarget = verificationCode || id;
+  const verifyUrl = `${config.appUrl || "http://localhost:3000"}/verify/prescription/${verifyTarget}`;
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(
     verifyUrl,
   )}`;

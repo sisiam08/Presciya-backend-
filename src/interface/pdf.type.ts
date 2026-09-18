@@ -43,6 +43,7 @@ export interface IPdfRenderData {
     patientIdentifier?: string | null;
   };
   serialNumber?: string | null;
+  verificationCode?: string | null;
 }
 
 export {};

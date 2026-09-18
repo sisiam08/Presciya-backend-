@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { prisma } from "../../lib/prisma";
 import { createAppError } from "../../errors/appError";
 import { Status } from "../../errors/httpStatus";
@@ -483,6 +484,7 @@ const compileHtmlPrescription = async (
   const renderData = {
     id: prescription.id,
     serialNumber: prescription.serialNumber || "",
+    verificationCode: prescription.verificationCode,
     createdAt: prescription.createdAt,
     status: prescription.status,
     complaints: prescription.complaints,
@@ -544,6 +546,10 @@ const generateSerial = (workspaceId: string, seq: number): string => {
   return `PRS-${prefix}-${String(seq).padStart(6, "0")}`;
 };
 
+// Opaque, non-sequential public verification identifier (Section 15).
+const generateVerificationCode = (): string =>
+  crypto.randomBytes(16).toString("base64url");
+
 // Finalize a draft prescription (locks it, assigns serial number)
 const finalizePrescription = async (
   prescriptionId: string,
@@ -603,6 +609,7 @@ const finalizePrescription = async (
           data: {
             status: PrescriptionStatus.FINALIZED,
             serialNumber,
+            verificationCode: generateVerificationCode(),
           },
           include: {
             patient: { select: { name: true, phone: true } },
@@ -664,20 +671,35 @@ const logPrint = async (
   });
 };
 
-const verifyPrescriptionPublic = async (id: string) => {
-  const prescription = await prisma.prescription.findFirst({
-    where: { id, isDeleted: false, status: PrescriptionStatus.FINALIZED },
-    select: {
-      id: true,
-      status: true,
-      serialNumber: true,
-      createdAt: true,
-      nextVisitDate: true,
-      doctorUserId: true,
-      doctor: { select: { id: true, name: true } },
-      chamber: { select: { id: true, name: true } },
-    },
-  });
+const verifyPrescriptionPublic = async (identifier: string) => {
+  const baseWhere = {
+    isDeleted: false,
+    status: PrescriptionStatus.FINALIZED,
+  } as const;
+
+  const select = {
+    id: true,
+    status: true,
+    serialNumber: true,
+    verificationCode: true,
+    createdAt: true,
+    nextVisitDate: true,
+    doctorUserId: true,
+    doctor: { select: { id: true, name: true } },
+    chamber: { select: { id: true, name: true } },
+  } as const;
+
+  // Prefer the opaque verification code; fall back to the legacy id so older
+  // QR codes keep working.
+  const prescription =
+    (await prisma.prescription.findFirst({
+      where: { verificationCode: identifier, ...baseWhere },
+      select,
+    })) ??
+    (await prisma.prescription.findFirst({
+      where: { id: identifier, ...baseWhere },
+      select,
+    }));
 
   if (!prescription) {
     throw createAppError(

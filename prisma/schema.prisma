@@ -510,6 +510,7 @@ model Prescription {
   userId        String? // creator / author of the prescription (optional)
   status        PrescriptionStatus @default(DRAFT)
   serialNumber  String? // human-readable serial assigned on finalization
+  verificationCode String? @unique // opaque, public-facing verification identifier (Section 15)
   complaints    String?
   diagnosis     String?
   clinicalNotes String?
