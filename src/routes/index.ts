@@ -17,6 +17,7 @@ import departmentRouter from "../modules/department/department.router";
 import institutionDoctorRouter from "../modules/institution/institution-doctor.router";
 import { NotificationRouters } from "../modules/notification/notification.router";
 import templateRouter from "../modules/template/template.router";
+import { FinanceRouters } from "../modules/finance/finance.router";
 
 const router = Router();
 
@@ -96,6 +97,10 @@ const routes: IRoute[] = [
   {
     path: "/prescription-templates",
     route: templateRouter,
+  },
+  {
+    path: "/finance",
+    route: FinanceRouters,
   },
 ];
 

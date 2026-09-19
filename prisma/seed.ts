@@ -2,7 +2,11 @@ import bcrypt from "bcryptjs";
 import { pathToFileURL } from "url";
 import { prisma } from "../src/lib/prisma";
 import config from "../src/config";
-import { SystemRole, WorkspaceRole } from "../generated/prisma/client";
+import {
+  SystemRole,
+  WorkspaceRole,
+  FinancialTransactionType,
+} from "../generated/prisma/client";
 
 /**
  * Platform feature catalog. Each feature gets a global feature flag and can be
@@ -129,12 +133,59 @@ async function seedFeatures() {
 const WORKSPACE_PERMISSIONS: { key: string; description: string }[] = [
   { key: "invite_users", description: "Invite and remove workspace members" },
   { key: "manage_roles", description: "Change member roles" },
+  // Phase 3: internal business finance
+  { key: "finance_view", description: "View financial transactions and summaries" },
+  { key: "finance_create", description: "Record income and expense transactions" },
+  { key: "finance_update", description: "Edit financial transactions" },
+  { key: "finance_delete", description: "Delete financial transactions" },
+  { key: "finance_report_view", description: "View finance reports" },
+];
+
+const FINANCE_OWNER = [
+  "finance_view",
+  "finance_create",
+  "finance_update",
+  "finance_delete",
+  "finance_report_view",
 ];
 
 const ROLE_PERMISSION_MAP: Record<string, string[]> = {
-  OWNER: ["invite_users", "manage_roles"],
-  ADMIN: ["invite_users", "manage_roles"],
+  OWNER: ["invite_users", "manage_roles", ...FINANCE_OWNER],
+  ADMIN: ["invite_users", "manage_roles", ...FINANCE_OWNER],
+  MANAGER: [
+    "finance_view",
+    "finance_create",
+    "finance_update",
+    "finance_report_view",
+  ],
+  DOCTOR: ["finance_view", "finance_create", "finance_report_view"],
+  ASSISTANT: ["finance_view"],
 };
+
+/**
+ * Default (system) financial categories shared across all workspaces. Doctors
+ * and institutions can add their own workspace-specific categories too.
+ */
+const DEFAULT_FINANCIAL_CATEGORIES: {
+  name: string;
+  type: FinancialTransactionType;
+}[] = [
+  { name: "Consultation", type: FinancialTransactionType.INCOME },
+  { name: "Procedure", type: FinancialTransactionType.INCOME },
+  { name: "Service", type: FinancialTransactionType.INCOME },
+  { name: "Other Income", type: FinancialTransactionType.INCOME },
+  { name: "Rent", type: FinancialTransactionType.EXPENSE },
+  { name: "Salary", type: FinancialTransactionType.EXPENSE },
+  { name: "Staff", type: FinancialTransactionType.EXPENSE },
+  { name: "Utilities", type: FinancialTransactionType.EXPENSE },
+  { name: "Equipment", type: FinancialTransactionType.EXPENSE },
+  { name: "Medical Supplies", type: FinancialTransactionType.EXPENSE },
+  { name: "Medicine", type: FinancialTransactionType.EXPENSE },
+  { name: "Maintenance", type: FinancialTransactionType.EXPENSE },
+  { name: "Marketing", type: FinancialTransactionType.EXPENSE },
+  { name: "Transport", type: FinancialTransactionType.EXPENSE },
+  { name: "Other Expense", type: FinancialTransactionType.EXPENSE },
+];
 
 async function seedPermissions() {
   for (const permission of WORKSPACE_PERMISSIONS) {
@@ -159,6 +210,28 @@ async function seedPermissions() {
     }
   }
   console.log(`Seeded ${WORKSPACE_PERMISSIONS.length} workspace permissions.`);
+}
+
+async function seedFinancialCategories() {
+  let created = 0;
+  for (const category of DEFAULT_FINANCIAL_CATEGORIES) {
+    const existing = await prisma.financialCategory.findFirst({
+      where: { workspaceId: null, name: category.name, type: category.type },
+      select: { id: true },
+    });
+    if (existing) continue;
+
+    await prisma.financialCategory.create({
+      data: {
+        name: category.name,
+        type: category.type,
+        isSystem: true,
+        workspaceId: null,
+      },
+    });
+    created++;
+  }
+  console.log(`Seeded ${created} default financial categories.`);
 }
 
 async function seedPlans() {
@@ -225,6 +298,7 @@ export async function seed() {
 
   await seedFeatures();
   await seedPermissions();
+  await seedFinancialCategories();
   await seedPlans();
 
   console.log("Seed completed successfully!");

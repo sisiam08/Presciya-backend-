@@ -69,6 +69,13 @@ enum PrescriptionStatus {
   ARCHIVED
 }
 
+// Internal business finance (Phase 3). This is manual bookkeeping — NOT the
+// Presciya platform subscription billing (which uses Payment/Invoice).
+enum FinancialTransactionType {
+  INCOME
+  EXPENSE
+}
+
 enum PaymentStatus {
   PENDING
   PAID
@@ -172,6 +179,8 @@ enum AuditEntityType {
   INVOICE
   VERIFICATION
   SYSTEM
+  FINANCIAL_TRANSACTION
+  FINANCIAL_CATEGORY
 }
 
 enum PaymentMethod {
@@ -241,6 +250,7 @@ model User {
   ownedWorkspaces              Workspace[]
   prescriptions                Prescription[]
   prescriptionTemplates        PrescriptionTemplate[]
+  financialTransactions        FinancialTransaction[]
   subscriptions                Subscription[]
   loginHistories               LoginHistory[]
   reviewedVerificationRequests VerificationRequest[]
@@ -350,6 +360,9 @@ model Workspace {
   prescriptions  Prescription[]
   usageTrackings UsageTracking[]
   templates      PrescriptionTemplate[]
+
+  financialCategories   FinancialCategory[]
+  financialTransactions FinancialTransaction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -506,6 +519,7 @@ model Patient {
   workspace     Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   doctor        Doctor         @relation(fields: [doctorId], references: [id], onDelete: SetDefault)
   prescriptions Prescription[]
+  financialTransactions FinancialTransaction[]
 
   // Extensions
   appointments Appointment[]
@@ -565,6 +579,7 @@ model Prescription {
   prescriptionMedicines PrescriptionMedicine[]
   pdfVersions           PrescriptionPdfVersion[]
   printLogs             PrescriptionPrintLog[]
+  financialTransactions FinancialTransaction[]
 
   createdAt DateTime @default(now())
 
@@ -574,6 +589,79 @@ model Prescription {
   @@index([doctorUserId])
   @@index([patientId])
   @@index([supersedesId])
+}
+
+// ─── Internal business finance (Phase 3) ─────────────────────────────────────
+
+// Reusable income/expense category. System categories have workspaceId = null
+// (shared defaults); workspace custom categories are scoped to one workspace.
+model FinancialCategory {
+  id String @id @default(uuid())
+
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  name        String
+  type        FinancialTransactionType
+  description String?
+  isSystem    Boolean @default(false)
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions FinancialTransaction[]
+
+  // A name+type is unique within a workspace (and among system categories).
+  @@unique([workspaceId, name, type])
+  @@index([workspaceId])
+  @@index([type])
+  @@map("financial_categories")
+}
+
+// A manually recorded financial event. Never auto-generated from prescriptions
+// or appointments in this phase.
+model FinancialTransaction {
+  id String @id @default(uuid())
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  type   FinancialTransactionType
+  amount Decimal                  @db.Decimal(14, 2)
+
+  categoryId String
+  category   FinancialCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  paymentMethod   PaymentMethod
+  description     String?
+  notes           String?
+  transactionDate DateTime
+
+  // Optional references — never required (e.g. chamber rent has no patient).
+  patientId      String?
+  patient        Patient?      @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  appointmentId  String?
+  appointment    Appointment?  @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  prescriptionId String?
+  prescription   Prescription? @relation(fields: [prescriptionId], references: [id], onDelete: SetNull)
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([transactionDate])
+  @@index([type])
+  @@index([categoryId])
+  @@index([workspaceId, transactionDate])
+  @@index([workspaceId, type, transactionDate])
+  @@map("financial_transactions")
 }
 
 model PrescriptionTemplate {
@@ -861,6 +949,8 @@ model Appointment {
   chamber Chamber @relation(fields: [chamberId], references: [id], onDelete: Cascade)
   doctor  Doctor  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  financialTransactions FinancialTransaction[]
 
   @@unique([chamberId, doctorId, appointmentDate, serialNo])
   @@index([doctorId])
