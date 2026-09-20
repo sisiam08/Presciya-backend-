@@ -21,6 +21,7 @@ export type {
   AuthenticatedRequest,
 } from "../interface/auth.type";
 import { prisma } from "../lib/prisma";
+import { FeatureServices } from "../modules/feature/feature.service";
 
 export type OwnershipResource = "prescription" | "patient" | "chamber";
 
@@ -360,7 +361,16 @@ export const authWorkspace = (
             workspaceId,
           },
         },
+        include: { workspace: { select: { type: true } } },
       });
+
+      // Institution workspaces are not usable in the current public release, so
+      // workspace-scoped operations are rejected here as well. This closes the
+      // "call the API directly and skip the UI" path. The state is
+      // admin-controlled (FeatureFlag) — not hardcoded.
+      if (membership?.workspace?.type === WorkspaceType.INSTITUTION) {
+        await FeatureServices.assertInstitutionEnabled();
+      }
 
       if (!membership) {
         throw createAppError(

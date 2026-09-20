@@ -1,11 +1,16 @@
 import express from "express";
 import { InstitutionDoctorController } from "./institution-doctor.controller";
 import { auth } from "../../middleware/auth";
+import { requireInstitutionEnabled } from "../../middleware/featureAccess";
 
 const router = express.Router();
 
 // All routes require authentication
 router.use(auth());
+
+// Institution functionality is not part of the current public release. The
+// gate is admin-controlled (FeatureFlag), so this can be re-enabled later.
+router.use(requireInstitutionEnabled as any);
 
 /**
  * Doctor assignment creation is owned by a single endpoint:

@@ -8,6 +8,44 @@ import {
   FeatureAccessResult,
 } from "../../interface/feature.type";
 
+/**
+ * Feature key used as the global availability switch for institution
+ * (hospital / clinic) functionality. Its FeatureFlag row gates the whole
+ * institution surface, so the code ships disabled and can be switched on
+ * later from the admin panel — there is no hardcoded "institution → off".
+ */
+export const INSTITUTION_FEATURE_KEY = "institution";
+
+export const INSTITUTION_COMING_SOON_MESSAGE =
+  "Institution features are currently under development and will be available soon.";
+
+/**
+ * Global (non-plan) availability check backed by FeatureFlag.isEnabledGlobally.
+ * Used for surfaces that are not tied to a plan entitlement. A missing feature
+ * or flag is treated as disabled for these surfaces (fail closed).
+ */
+const isGloballyEnabled = async (featureKey: string): Promise<boolean> => {
+  const feature = await prisma.feature.findUnique({
+    where: { key: featureKey },
+    select: { featureFlags: { select: { isEnabledGlobally: true } } },
+  });
+
+  const flag = feature?.featureFlags?.[0];
+  return flag ? flag.isEnabledGlobally : false;
+};
+
+const assertGloballyEnabled = async (featureKey: string, message: string) => {
+  if (!(await isGloballyEnabled(featureKey))) {
+    throw createAppError(message, Status.FORBIDDEN, true, "FEATURE_UNAVAILABLE");
+  }
+};
+
+/** Throws the standard "coming soon" error when institution is unavailable. */
+const assertInstitutionEnabled = () =>
+  assertGloballyEnabled(INSTITUTION_FEATURE_KEY, INSTITUTION_COMING_SOON_MESSAGE);
+
+const isInstitutionEnabled = () => isGloballyEnabled(INSTITUTION_FEATURE_KEY);
+
 const checkFeatureAccess = async (
   params: FeatureAccessParams,
 ): Promise<FeatureAccessResult> => {
@@ -64,4 +102,7 @@ const checkFeatureAccess = async (
 
 export const FeatureServices = {
   checkFeatureAccess,
+  isGloballyEnabled,
+  isInstitutionEnabled,
+  assertInstitutionEnabled,
 };

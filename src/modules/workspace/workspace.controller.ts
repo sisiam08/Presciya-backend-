@@ -5,6 +5,7 @@ import { AuthenticatedRequest } from "../../middleware/auth";
 import { createAppError } from "../../errors/appError";
 import { Status } from "../../errors/httpStatus";
 import { workspaceService } from "./workspace.service";
+import { FeatureServices } from "../feature/feature.service";
 import { WorkspaceType, MembershipStatus } from "../../../generated/prisma/enums";
 
 // Create a workspace
@@ -16,6 +17,12 @@ const createWorkspace = catchAsync(
     }
 
     const { name, image, type } = req.body;
+
+    // Institution workspaces are not part of the current public release.
+    if (type === WorkspaceType.INSTITUTION) {
+      await FeatureServices.assertInstitutionEnabled();
+    }
+
     const workspace = await workspaceService.createWorkspace(
       userId,
       name,

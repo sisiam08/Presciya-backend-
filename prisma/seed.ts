@@ -16,6 +16,12 @@ const FEATURES: {
   key: string;
   description: string;
   category: string;
+  /**
+   * Global availability for a brand-new flag row. Existing rows are never
+   * overwritten, so an admin toggling a flag is respected on later seeds.
+   * Institution ships disabled: the code is in place but not publicly usable.
+   */
+  enabledByDefault?: boolean;
 }[] = [
   { key: "create_prescription", description: "Create digital prescriptions", category: "prescriptions" },
   { key: "appointments", description: "Appointment booking and live queue", category: "appointments" },
@@ -29,6 +35,10 @@ const FEATURES: {
   { key: "finance", description: "Internal business finance", category: "finance" },
   { key: "visiting_fees", description: "Configure visiting / follow-up fees", category: "finance" },
   { key: "prescription_language", description: "Change prescription language and templates", category: "prescriptions" },
+  // Not part of the current public release. Disabled by default globally; the
+  // implementation stays in the codebase and can be switched on from the admin
+  // panel when institution functionality is finished.
+  { key: "institution", description: "Institution, hospital and clinic workspaces", category: "workspaces", enabledByDefault: false },
 ];
 
 const VARIANTS: {
@@ -36,6 +46,8 @@ const VARIANTS: {
   dailyPrescriptionLimit: number;
   price: number;
   description: Record<string, string>;
+  /** Only applied when the plan is first created; admins own it afterwards. */
+  isActive?: boolean;
 }[] = [
   {
     variantName: "Free Trial",
@@ -72,6 +84,9 @@ const VARIANTS: {
       en: "Full institutional management. Unlimited doctors, departments, prescriptions.",
       bn: "সম্পূর্ণ প্রাতিষ্ঠানিক ব্যবস্থাপনা। সীমাহীন ডাক্তার, বিভাগ, প্রেসক্রিপশন।",
     },
+    // Institution plans are not offered publicly yet. Kept in the database and
+    // re-activatable from the admin panel.
+    isActive: false,
   },
 ];
 
@@ -133,13 +148,20 @@ async function seedFeatures() {
     const record = await prisma.feature.upsert({
       where: { key: feature.key },
       update: { description: feature.description, category: feature.category },
-      create: feature,
+      create: {
+        key: feature.key,
+        description: feature.description,
+        category: feature.category,
+      },
     });
 
     await prisma.featureFlag.upsert({
       where: { featureId: record.id },
       update: {},
-      create: { featureId: record.id, isEnabledGlobally: true },
+      create: {
+        featureId: record.id,
+        isEnabledGlobally: feature.enabledByDefault ?? true,
+      },
     });
   }
   console.log(`Seeded ${FEATURES.length} features and feature flags.`);
@@ -268,7 +290,7 @@ async function seedPlans() {
           description: variant.description,
           dailyPrescriptionLimit: variant.dailyPrescriptionLimit,
           price: variant.price,
-          isActive: true,
+          isActive: variant.isActive ?? true,
         },
       }));
 

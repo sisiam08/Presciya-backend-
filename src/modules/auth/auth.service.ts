@@ -20,6 +20,7 @@ import {
 import config from "../../config";
 import { emailService } from "../../utils/emailService";
 import { AuditService } from "../audit/audit.service";
+import { FeatureServices } from "../feature/feature.service";
 
 const generateOTP = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -167,6 +168,12 @@ const signUp = async (
   ipAddress?: string,
 ) => {
   const { name, email, password, accountType, OTP } = userData;
+
+  // Institution / hospital / clinic accounts are not part of the current public
+  // release. The flag is admin-controlled (FeatureFlag); no hardcoded rule.
+  if (accountType === "INSTITUTION") {
+    await FeatureServices.assertInstitutionEnabled();
+  }
 
   // One email maps to exactly one User, forever (Section 1.3). Guard against a
   // race where another request created the account after sendOTP.
@@ -737,6 +744,11 @@ const switchWorkspace = async (
       `Your membership status for this workspace is ${workspace.status}. Please contact support.`,
       Status.FORBIDDEN,
     );
+  }
+
+  // Institution workspaces are not usable in the current public release.
+  if (workspace.workspace.type === WorkspaceType.INSTITUTION) {
+    await FeatureServices.assertInstitutionEnabled();
   }
 
   const user = await prisma.user.findUnique({

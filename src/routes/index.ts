@@ -20,6 +20,7 @@ import templateRouter from "../modules/template/template.router";
 import { FinanceRouters } from "../modules/finance/finance.router";
 import { FeeRouters } from "../modules/fee/fee.router";
 import { RevenueRouters } from "../modules/revenue/revenue.router";
+import { SystemRouters } from "../modules/system/system.router";
 
 const router = Router();
 
@@ -111,6 +112,10 @@ const routes: IRoute[] = [
   {
     path: "/revenue-share",
     route: RevenueRouters,
+  },
+  {
+    path: "/system",
+    route: SystemRouters,
   },
 ];
 

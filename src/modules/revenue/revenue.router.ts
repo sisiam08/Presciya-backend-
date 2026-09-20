@@ -3,9 +3,14 @@ import { RevenueControllers } from "./revenue.controller";
 import { RevenueValidation } from "./revenue.validation";
 import validateRequest from "../../middleware/validateRequest";
 import { authWorkspace } from "../../middleware/auth";
+import { requireInstitutionEnabled } from "../../middleware/featureAccess";
 import { WorkspaceRole } from "../../../generated/prisma/enums";
 
 const router = Router();
+
+// Revenue sharing applies only to institution workspaces, which are not part
+// of the current public release. Admin-controlled gate (FeatureFlag).
+router.use(requireInstitutionEnabled as any);
 
 // Reads: any active member. Writes: OWNER/ADMIN of the institution workspace
 // only. (The service additionally verifies the workspace is an institution.)
