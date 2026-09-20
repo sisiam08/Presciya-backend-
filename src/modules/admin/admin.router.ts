@@ -65,6 +65,36 @@ router.get(
   },
 );
 
+// Create a subscription plan (price/availability are admin-owned data)
+router.post(
+  "/plans",
+  requirePermission("manage_plans"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const plan = await adminService.createPlan(req.body);
+      res.status(201).json(plan);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Edit a plan: name, price, prescription limit, description, active/inactive.
+// Historical subscription/payment records keep their own price snapshot.
+router.patch(
+  "/plans/:variantId",
+  requirePermission("manage_plans"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { variantId } = req.params as { variantId: string };
+      const plan = await adminService.updatePlan(variantId, req.body);
+      res.json(plan);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 // Platform feature catalog (all toggles an admin can attach to a plan)
 router.get(
   "/features",

@@ -6,6 +6,8 @@ import {
   InvoiceStatus,
 } from "../../../generated/prisma/client";
 import { getPaginationParams, buildPaginatedResult } from "../../utils/pagination";
+import { createAppError } from "../../errors/appError";
+import { Status } from "../../errors/httpStatus";
 
 export const adminService = {  // User management
   async listUsers() {
@@ -78,6 +80,76 @@ export const adminService = {  // User management
     });
   },
 
+  /**
+   * Creates a subscription plan. Price and availability are admin-owned data —
+   * never hardcoded in the client. New plans are active unless told otherwise.
+   */
+  async createPlan(data: {
+    variantName: string;
+    price: number;
+    dailyPrescriptionLimit?: number;
+    description?: Record<string, string>;
+    isActive?: boolean;
+  }) {
+    if (!data.variantName?.trim()) {
+      throw createAppError("Plan name is required", Status.BAD_REQUEST);
+    }
+
+    return prisma.subscriptionVariant.create({
+      data: {
+        variantName: data.variantName.trim(),
+        description: (data.description ?? { en: "", bn: "" }) as any,
+        price: Number(data.price ?? 0),
+        dailyPrescriptionLimit: Number(data.dailyPrescriptionLimit ?? 0),
+        isActive: data.isActive ?? true,
+      },
+    });
+  },
+
+  /**
+   * Updates a plan's name, price, prescription limit, description and/or
+   * active state. Historical subscription/payment rows keep their own snapshot
+   * of the price they were sold at, so editing here never rewrites them.
+   */
+  async updatePlan(
+    variantId: string,
+    data: {
+      variantName?: string;
+      price?: number;
+      dailyPrescriptionLimit?: number;
+      description?: Record<string, string>;
+      isActive?: boolean;
+    },
+  ) {
+    const existing = await prisma.subscriptionVariant.findUnique({
+      where: { id: variantId },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      throw createAppError("Plan not found", Status.NOT_FOUND);
+    }
+
+    const update: Record<string, unknown> = {};
+    if (data.variantName !== undefined) {
+      if (!String(data.variantName).trim()) {
+        throw createAppError("Plan name cannot be empty", Status.BAD_REQUEST);
+      }
+      update.variantName = String(data.variantName).trim();
+    }
+    if (data.price !== undefined) update.price = Number(data.price);
+    if (data.dailyPrescriptionLimit !== undefined) {
+      update.dailyPrescriptionLimit = Number(data.dailyPrescriptionLimit);
+    }
+    if (data.description !== undefined) update.description = data.description;
+    if (data.isActive !== undefined) update.isActive = Boolean(data.isActive);
+
+    return prisma.subscriptionVariant.update({
+      where: { id: variantId },
+      data: update as any,
+    });
+  },
+
   async setPlanFeatureLimit(
     variantId: string,
     featureId: string,
@@ -91,9 +163,13 @@ export const adminService = {  // User management
     });
   },
 
-  /** All platform features (the toggles an admin can attach to a plan). */
+  /**
+   * All platform features (the toggles an admin can attach to a plan) plus
+   * their current global availability flag.
+   */
   async listFeatures() {
     return prisma.feature.findMany({
+      include: { featureFlags: { select: { isEnabledGlobally: true } } },
       orderBy: [{ category: "asc" }, { key: "asc" }],
     });
   },
