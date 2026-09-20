@@ -18,6 +18,7 @@ import { getPaginationParams } from "../../utils/pagination";
 import { FeeServices } from "../fee/fee.service";
 import { RevenueServices } from "../revenue/revenue.service";
 import { SubscriptionServices } from "../subscription/subscription.service";
+import { getStartOfDay, getStartOfNextDay } from "../../utils/datetime";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -43,10 +44,10 @@ const parseDate = (value: string): Date => {
   return parsed;
 };
 
-const dayStart = (d: Date) =>
-  new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-const nextDay = (d: Date) =>
-  new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0, 0);
+// Day boundaries are Bangladesh calendar days (the product's operating
+// timezone), so daily serials and limits reset at local midnight.
+const dayStart = (d: Date) => getStartOfDay(d);
+const nextDay = (d: Date) => getStartOfNextDay(d);
 
 const resolveWorkspace = async (workspaceId: string) => {
   const ws = await prisma.workspace.findUnique({

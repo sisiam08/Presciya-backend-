@@ -10,6 +10,16 @@ import {
 } from "../../../generated/prisma/enums";
 import { AuditService } from "../audit/audit.service";
 import { PermissionServices } from "../permission/permission.service";
+import {
+  bangladeshDayStart,
+  getDayOfWeek,
+  getEndOfDay,
+  getEndOfMonth,
+  getEndOfYear,
+  getStartOfDay,
+  getStartOfMonth,
+  getStartOfYear,
+} from "../../utils/datetime";
 
 // ─── Date helpers (local time — consistent with the server's clock) ──────────
 
@@ -18,14 +28,12 @@ import { PermissionServices } from "../permission/permission.service";
 const parseTransactionDate = (value: string): Date => {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
   if (match) {
-    return new Date(
+    // A picked date means that calendar day in Bangladesh time, not the
+    // server's timezone.
+    return bangladeshDayStart(
       Number(match[1]),
-      Number(match[2]) - 1,
+      Number(match[2]),
       Number(match[3]),
-      0,
-      0,
-      0,
-      0,
     );
   }
   const parsed = new Date(value);
@@ -35,25 +43,24 @@ const parseTransactionDate = (value: string): Date => {
   return parsed;
 };
 
-const startOfDay = (d: Date) =>
-  new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-const endOfDay = (d: Date) =>
-  new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+// All finance period boundaries are Bangladesh calendar boundaries (the
+// product's operating timezone), so "today" means the user's local day.
+const startOfDay = (d: Date) => getStartOfDay(d);
+const endOfDay = (d: Date) => getEndOfDay(d);
 
 // Week starts on Saturday (matches the app's en-BD weekday display).
 const startOfWeek = (d: Date) => {
-  const daysSinceSaturday = (d.getDay() + 1) % 7;
-  const start = startOfDay(d);
-  start.setDate(start.getDate() - daysSinceSaturday);
-  return start;
+  const dayOfWeek = getDayOfWeek(d); // 0 = Sunday … 6 = Saturday
+  const daysSinceSaturday = (dayOfWeek + 1) % 7;
+  return getStartOfDay(
+    new Date(getStartOfDay(d).getTime() - daysSinceSaturday * 24 * 60 * 60 * 1000),
+  );
 };
 
-const startOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth(), 1);
-const endOfMonth = (d: Date) =>
-  new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
-const startOfYear = (d: Date) => new Date(d.getFullYear(), 0, 1);
-const endOfYear = (d: Date) =>
-  new Date(d.getFullYear(), 11, 31, 23, 59, 59, 999);
+const startOfMonth = (d: Date) => getStartOfMonth(d);
+const endOfMonth = (d: Date) => getEndOfMonth(d);
+const startOfYear = (d: Date) => getStartOfYear(d);
+const endOfYear = (d: Date) => getEndOfYear(d);
 
 type PeriodKey = "today" | "week" | "month" | "year" | "all" | "custom";
 

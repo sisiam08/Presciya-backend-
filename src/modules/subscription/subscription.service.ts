@@ -8,16 +8,16 @@ import {
   NotificationType,
 } from "../../../generated/prisma/enums";
 import { NotificationServices } from "../notification/notification.service";
+import { getStartOfDay, getStartOfMonth } from "../../utils/datetime";
 
 type FeaturePeriod = "daily" | "monthly";
 
-const getPeriodStart = (period: FeaturePeriod): Date => {
-  const now = new Date();
-  if (period === "monthly") {
-    return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-  }
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-};
+/**
+ * Start of the current quota period in Bangladesh time (the product's
+ * operating timezone) so a "day" rolls over at local midnight.
+ */
+const getPeriodStart = (period: FeaturePeriod): Date =>
+  period === "monthly" ? getStartOfMonth() : getStartOfDay();
 
 /**
  * Effective usage for the current period. A usage row whose `resetAt` is older
