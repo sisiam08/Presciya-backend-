@@ -95,13 +95,32 @@ const createPrescription = async (
     throw createAppError("Patient not found", Status.NOT_FOUND);
   }
 
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { type: true },
+  });
+  const isPersonalWorkspace = workspace?.type === WorkspaceType.PERSONAL;
+
+  // Chamber resolution. A Personal-workspace prescription is not tied to a
+  // chamber (the form offers none), so a chamber is optional there. Chamber /
+  // institution prescriptions keep the existing behaviour: use the requested
+  // chamber, otherwise the workspace's first chamber.
   const chamber = prescriptionData.chamberId
     ? await prisma.chamber.findFirst({
         where: { id: prescriptionData.chamberId, workspaceId },
       })
-    : await prisma.chamber.findFirst({ where: { workspaceId } });
+    : isPersonalWorkspace
+      ? null
+      : await prisma.chamber.findFirst({ where: { workspaceId } });
 
-  if (!chamber) {
+  if (prescriptionData.chamberId && !chamber) {
+    throw createAppError(
+      "Chamber not found in this workspace",
+      Status.NOT_FOUND,
+    );
+  }
+
+  if (!isPersonalWorkspace && !chamber) {
     throw createAppError(
       "No chamber available in this workspace",
       Status.NOT_FOUND,
@@ -112,12 +131,7 @@ const createPrescription = async (
   // PERSONAL context is a free service (no appointment required). CHAMBER and
   // INSTITUTION contexts require an eligible (PAID or FREE) appointment that
   // belongs to this workspace, this patient and this doctor.
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
-    select: { type: true },
-  });
-
-  if (workspace?.type !== WorkspaceType.PERSONAL) {
+  if (!isPersonalWorkspace) {
     if (!prescriptionData.appointmentId) {
       throw createAppError(
         "An appointment is required to create a prescription in this workspace.",
@@ -174,7 +188,8 @@ const createPrescription = async (
       data: {
         doctorUserId: userId,
         patientId: prescriptionData.patientId,
-        chamberId: chamber.id,
+        // Null for Personal-workspace prescriptions (no chamber required).
+        chamberId: chamber?.id ?? null,
         workspaceId: workspaceId,
         userId: userId,
         complaints: prescriptionData.complaints || null,
@@ -825,10 +840,13 @@ const finalizePrescription = async (
       select: { name: true },
     }),
     prisma.doctor.findUnique({ where: { userId: existing.doctorUserId } }),
-    prisma.chamber.findUnique({
-      where: { id: existing.chamberId },
-      include: { contactNumbers: true },
-    }),
+    // Personal-workspace prescriptions have no chamber.
+    existing.chamberId
+      ? prisma.chamber.findUnique({
+          where: { id: existing.chamberId },
+          include: { contactNumbers: true },
+        })
+      : Promise.resolve(null),
   ]);
 
   const renderSnapshot = {

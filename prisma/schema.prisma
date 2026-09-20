@@ -567,13 +567,14 @@ model Prescription {
   id String @id @default(uuid())
 
   workspaceId  String
-  chamberId    String
+  // Optional: Personal-workspace prescriptions are not tied to a chamber.
+  chamberId    String?
   doctorUserId String
 
   patientId String
 
   workspace Workspace @relation(fields: [workspaceId], references: [id])
-  chamber   Chamber   @relation(fields: [chamberId], references: [id])
+  chamber   Chamber?  @relation(fields: [chamberId], references: [id])
 
   doctor  User    @relation(fields: [doctorUserId], references: [id])
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
