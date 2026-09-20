@@ -44,7 +44,9 @@ const StructuredMedicineSchema = z.object({
 const createPrescriptionSchema = z.object({
   body: z.object({
     patientId: z.string().uuid("Invalid Patient ID"),
-    chamberId: z.string().uuid("Invalid Chamber ID"),
+    // Optional: chamber workspaces have no separate chamber row; the service
+    // falls back to the workspace's first chamber.
+    chamberId: z.string().uuid("Invalid Chamber ID").optional(),
     complaints: z.string().optional(),
     diagnosis: z.string().optional(),
     // Clinical Vitals (moved to ClinicalObservation table)
@@ -64,6 +66,8 @@ const createPrescriptionSchema = z.object({
     // Rendering choices. Never trust arbitrary strings — only known enum values.
     language: z.nativeEnum(PrescriptionLanguage).optional(),
     template: z.nativeEnum(PrescriptionDesignTemplate).optional(),
+    // The eligible visit (required in chamber/institution context).
+    appointmentId: z.string().uuid().optional(),
   }),
 });
 

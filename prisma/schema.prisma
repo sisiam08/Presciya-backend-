@@ -12,9 +12,34 @@ enum SystemRole {
   SUPER_ADMIN
 }
 
+// Top-level workspace/context categories. A CHAMBER workspace represents a
+// single doctor chamber; an INSTITUTION workspace is a hospital or clinic.
 enum WorkspaceType {
   PERSONAL
+  CHAMBER
   INSTITUTION
+}
+
+// Only meaningful for INSTITUTION workspaces.
+enum InstitutionType {
+  HOSPITAL
+  CLINIC
+}
+
+// A visit is either a regular appointment or a follow-up of an earlier visit.
+enum AppointmentType {
+  NORMAL
+  FOLLOW_UP
+}
+
+// Payment lifecycle for an appointment's consultation fee. Separate from the
+// platform-billing PaymentStatus enum (that one is for subscriptions).
+enum AppointmentPaymentStatus {
+  PENDING
+  PAID
+  FREE
+  CANCELLED
+  REFUNDED
 }
 
 enum WorkspaceRole {
@@ -294,6 +319,8 @@ model Doctor {
   appointments       Appointment[]
   institutionDoctors InstitutionDoctor[]
   favoriteMedicines  DoctorFavoriteMedicine[]
+  visitingFees       DoctorVisitingFee[]
+  revenueShareConfigs RevenueShareConfig[]
 }
 
 model Institution {
@@ -337,6 +364,9 @@ model Workspace {
 
   type WorkspaceType
 
+  // HOSPITAL | CLINIC — only set for INSTITUTION workspaces.
+  institutionType InstitutionType?
+
   name String
   slug String @unique
 
@@ -363,6 +393,9 @@ model Workspace {
 
   financialCategories   FinancialCategory[]
   financialTransactions FinancialTransaction[]
+  visitingFees          DoctorVisitingFee[]
+  revenueShareConfigs   RevenueShareConfig[]
+  appointments          Appointment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -575,6 +608,10 @@ model Prescription {
   deletedAt     DateTime?
   updatedAt     DateTime           @updatedAt
 
+  // The visit this prescription belongs to (Chamber/Institution context).
+  appointmentId String?
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
   clinicalObservations  ClinicalObservation[]
   prescriptionMedicines PrescriptionMedicine[]
   pdfVersions           PrescriptionPdfVersion[]
@@ -662,6 +699,51 @@ model FinancialTransaction {
   @@index([workspaceId, transactionDate])
   @@index([workspaceId, type, transactionDate])
   @@map("financial_transactions")
+}
+
+// The doctor's consultation fee for a specific workspace. Owned by the doctor
+// — a hospital/clinic can never change this value.
+model DoctorVisitingFee {
+  id String @id @default(uuid())
+
+  doctorId    String
+  workspaceId String
+  doctor      Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  visitingFee Decimal  @db.Decimal(12, 2)
+  // Optional separate follow-up fee; falls back to visitingFee when null.
+  followUpFee Decimal? @db.Decimal(12, 2)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([doctorId, workspaceId])
+  @@index([workspaceId])
+  @@map("doctor_visiting_fees")
+}
+
+// Hospital/clinic revenue-share percentage. A row with doctorId = null is the
+// workspace default; a row with doctorId set overrides it for that doctor.
+model RevenueShareConfig {
+  id String @id @default(uuid())
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  doctorId String?
+  doctor   Doctor? @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  percentage Decimal @db.Decimal(5, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, doctorId])
+  @@index([workspaceId])
+  @@map("revenue_share_configs")
 }
 
 model PrescriptionTemplate {
@@ -934,28 +1016,62 @@ model ChamberSchedule {
 }
 
 model Appointment {
-  id              String            @id @default(uuid())
-  chamberId       String
-  doctorId        String
-  patientId       String
+  id String @id @default(uuid())
+
+  // Serial numbers are workspace-scoped and reset daily:
+  // @@unique([workspaceId, appointmentDate, serialNo]).
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // Optional — institution sub-chambers. A CHAMBER workspace needs no chamber.
+  chamberId String?
+  chamber   Chamber? @relation(fields: [chamberId], references: [id], onDelete: SetNull)
+
+  doctorId String
+  doctor   Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
   appointmentDate DateTime
   serialNo        Int
   status          AppointmentStatus @default(PENDING) // 3NF: Use enum instead of string
   cancelReason    String?
   notes           String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
 
-  chamber Chamber @relation(fields: [chamberId], references: [id], onDelete: Cascade)
-  doctor  Doctor  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  // ── Visit type + fee/payment snapshot (frozen — never recomputed) ──────────
+  appointmentType AppointmentType @default(NORMAL)
+  visitingFee     Decimal?        @db.Decimal(12, 2) // original consultation fee
+  discount        Decimal         @default(0) @db.Decimal(12, 2)
+  payableAmount   Decimal?        @db.Decimal(12, 2) // visitingFee - discount
+  paidAmount      Decimal         @default(0) @db.Decimal(12, 2)
+  paymentStatus   AppointmentPaymentStatus @default(PENDING)
+  paymentMethod   PaymentMethod?
+  paidAt          DateTime?
 
+  // ── Institution revenue split snapshot (institution workspaces only) ───────
+  revenueSharePercent Decimal? @db.Decimal(5, 2)
+  hospitalShareAmount Decimal? @db.Decimal(12, 2)
+  doctorShareAmount   Decimal? @db.Decimal(12, 2)
+
+  // ── Follow-up chain ────────────────────────────────────────────────────────
+  followUpOfId String?
+  followUpOf   Appointment?  @relation("AppointmentFollowUps", fields: [followUpOfId], references: [id], onDelete: SetNull)
+  followUps    Appointment[] @relation("AppointmentFollowUps")
+
+  prescriptions         Prescription[]
   financialTransactions FinancialTransaction[]
 
-  @@unique([chamberId, doctorId, appointmentDate, serialNo])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workspaceId, appointmentDate, serialNo])
+  @@index([workspaceId])
   @@index([doctorId])
   @@index([patientId])
   @@index([appointmentDate])
+  @@index([paymentStatus])
+  @@index([followUpOfId])
   @@map("appointments")
 }
 

@@ -25,7 +25,7 @@ const createPrescription = async (
   workspaceId: string,
   prescriptionData: {
     patientId: string;
-    chamberId: string; // Required
+    chamberId?: string; // Optional — resolved to the workspace's chamber
     complaints?: string;
     diagnosis?: string;
     // Vital signs (moved to ClinicalObservation)
@@ -43,6 +43,8 @@ const createPrescription = async (
     // Optional per-prescription overrides; default to the doctor's settings.
     language?: PrescriptionLanguage;
     template?: PrescriptionDesignTemplate;
+    // Required in CHAMBER/INSTITUTION context (the eligible visit).
+    appointmentId?: string;
   },
 ) => {
   // Check if user is verified to perform this action
@@ -93,12 +95,77 @@ const createPrescription = async (
     throw createAppError("Patient not found", Status.NOT_FOUND);
   }
 
-  const chamber = await prisma.chamber.findFirst({
-    where: { id: prescriptionData.chamberId, workspaceId },
-  });
+  const chamber = prescriptionData.chamberId
+    ? await prisma.chamber.findFirst({
+        where: { id: prescriptionData.chamberId, workspaceId },
+      })
+    : await prisma.chamber.findFirst({ where: { workspaceId } });
 
   if (!chamber) {
-    throw createAppError("Chamber not found", Status.NOT_FOUND);
+    throw createAppError(
+      "No chamber available in this workspace",
+      Status.NOT_FOUND,
+    );
+  }
+
+  // ── Visit eligibility (Section: prescription eligibility) ──────────────────
+  // PERSONAL context is a free service (no appointment required). CHAMBER and
+  // INSTITUTION contexts require an eligible (PAID or FREE) appointment that
+  // belongs to this workspace, this patient and this doctor.
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { type: true },
+  });
+
+  if (workspace?.type !== WorkspaceType.PERSONAL) {
+    if (!prescriptionData.appointmentId) {
+      throw createAppError(
+        "An appointment is required to create a prescription in this workspace.",
+        Status.BAD_REQUEST,
+        true,
+        "APPOINTMENT_REQUIRED",
+      );
+    }
+
+    const appointment = await prisma.appointment.findFirst({
+      where: { id: prescriptionData.appointmentId, workspaceId },
+      select: {
+        id: true,
+        doctorId: true,
+        patientId: true,
+        paymentStatus: true,
+      },
+    });
+
+    if (!appointment) {
+      throw createAppError(
+        "Appointment not found in this workspace",
+        Status.NOT_FOUND,
+      );
+    }
+    if (appointment.patientId !== prescriptionData.patientId) {
+      throw createAppError(
+        "Appointment does not belong to this patient",
+        Status.BAD_REQUEST,
+      );
+    }
+    if (doctor && appointment.doctorId !== doctor.id) {
+      throw createAppError(
+        "Appointment belongs to another doctor",
+        Status.FORBIDDEN,
+      );
+    }
+    if (
+      appointment.paymentStatus !== "PAID" &&
+      appointment.paymentStatus !== "FREE"
+    ) {
+      throw createAppError(
+        "Payment is incomplete. Prescription cannot be created until the appointment is paid or marked free.",
+        Status.BAD_REQUEST,
+        true,
+        "PAYMENT_REQUIRED",
+      );
+    }
   }
 
   return await prisma.$transaction(async (tx) => {
@@ -107,7 +174,7 @@ const createPrescription = async (
       data: {
         doctorUserId: userId,
         patientId: prescriptionData.patientId,
-        chamberId: prescriptionData.chamberId,
+        chamberId: chamber.id,
         workspaceId: workspaceId,
         userId: userId,
         complaints: prescriptionData.complaints || null,
@@ -120,6 +187,7 @@ const createPrescription = async (
         status: prescriptionData.status ?? PrescriptionStatus.DRAFT,
         language,
         template,
+        appointmentId: prescriptionData.appointmentId ?? null,
       },
     });
 

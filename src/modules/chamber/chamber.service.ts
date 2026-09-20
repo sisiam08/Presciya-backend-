@@ -9,6 +9,7 @@ import {
 } from "../../../generated/prisma/enums";
 import { AuditService } from "../audit/audit.service";
 import { checkUserVerification } from "../../utils/verificationCheck";
+import { SubscriptionServices } from "../subscription/subscription.service";
 
 const createChamber = async (
   userId: string,
@@ -50,6 +51,9 @@ const createChamber = async (
   if (!workspaceId) {
     throw createAppError("Workspace not found for user", Status.NOT_FOUND);
   }
+
+  // Enforce the plan's chamber limit (Free plan = 1 chamber).
+  await SubscriptionServices.assertChamberLimit(userId, workspaceId);
 
   return await prisma.$transaction(async (tx) => {
     const chamber = await tx.chamber.create({
@@ -332,8 +336,7 @@ const createAppointment = async (
 
         const lastAppointment = await tx.appointment.findFirst({
           where: {
-            chamberId,
-            doctorId: appointmentData.doctorId,
+            workspaceId,
             appointmentDate: dateObj,
           },
           orderBy: {
@@ -353,6 +356,7 @@ const createAppointment = async (
 
         return tx.appointment.create({
           data: {
+            workspaceId,
             chamberId,
             doctorId: appointmentData.doctorId,
             patientId: appointmentData.patientId,

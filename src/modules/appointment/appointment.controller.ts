@@ -1,6 +1,14 @@
 import { Request, Response } from "express";
 import catchAsync from "../../utils/catchAsync";
+import sendResponse from "../../utils/sendResponse";
+import { Status } from "../../errors/httpStatus";
+import { requireStringParam } from "../../utils/requestParams";
 import { AppointmentService } from "./appointment.service";
+
+const meta = (req: Request) => ({
+  ipAddress: req.ip,
+  userAgent: req.headers["user-agent"] as string | undefined,
+});
 
 const create = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.id as string;
@@ -9,8 +17,64 @@ const create = catchAsync(async (req: Request, res: Response) => {
     userId,
     workspaceId,
     req.body,
+    meta(req),
   );
-  res.status(201).json(appointment);
+  sendResponse(res, {
+    statusCode: Status.CREATED,
+    success: true,
+    message: "Appointment created successfully",
+    data: appointment,
+  });
+});
+
+const recordPayment = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.user?.id as string;
+  const workspaceId = (req as any).workspaceId as string;
+  const id = requireStringParam(req.params.id, "Appointment ID");
+  const updated = await AppointmentService.recordPayment(
+    id,
+    userId,
+    workspaceId,
+    req.body,
+    meta(req),
+  );
+  sendResponse(res, {
+    statusCode: Status.OK,
+    success: true,
+    message: "Payment recorded successfully",
+    data: updated,
+  });
+});
+
+const searchToday = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.user?.id as string;
+  const workspaceId = (req as any).workspaceId as string;
+  const q = (req.query.q as string) || "";
+  const doctorId = req.query.doctorId as string | undefined;
+  const items = await AppointmentService.searchToday(
+    userId,
+    workspaceId,
+    q,
+    doctorId,
+  );
+  sendResponse(res, {
+    statusCode: Status.OK,
+    success: true,
+    message: "Today's appointments fetched",
+    data: items,
+  });
+});
+
+const getOne = catchAsync(async (req: Request, res: Response) => {
+  const workspaceId = (req as any).workspaceId as string;
+  const id = requireStringParam(req.params.id, "Appointment ID");
+  const appointment = await AppointmentService.getAppointment(id, workspaceId);
+  sendResponse(res, {
+    statusCode: Status.OK,
+    success: true,
+    message: "Appointment fetched",
+    data: appointment,
+  });
 });
 
 const updateStatus = catchAsync(async (req: Request, res: Response) => {
@@ -25,13 +89,18 @@ const updateStatus = catchAsync(async (req: Request, res: Response) => {
     status,
     cancelReason,
   );
-  res.json(updated);
+  sendResponse(res, {
+    statusCode: Status.OK,
+    success: true,
+    message: "Appointment status updated",
+    data: updated,
+  });
 });
 
 const list = catchAsync(async (req: Request, res: Response) => {
   const workspaceId = (req as any).workspaceId as string;
-  const { doctorId, patientId, from, to, page, limit } = req.query as any;
-  const filters: any = { doctorId, patientId };
+  const { doctorId, patientId, from, to, date, page, limit } = req.query as any;
+  const filters: any = { doctorId, patientId, date };
   if (from) filters.from = new Date(from);
   if (to) filters.to = new Date(to);
   const data = await AppointmentService.listAppointments(
@@ -40,7 +109,20 @@ const list = catchAsync(async (req: Request, res: Response) => {
     parseInt(page || "1"),
     parseInt(limit || "20"),
   );
-  res.json(data);
+  sendResponse(res, {
+    statusCode: Status.OK,
+    success: true,
+    message: "Appointments fetched",
+    data: data.items,
+    meta: data.meta,
+  });
 });
 
-export const AppointmentController = { create, updateStatus, list };
+export const AppointmentController = {
+  create,
+  recordPayment,
+  searchToday,
+  getOne,
+  updateStatus,
+  list,
+};

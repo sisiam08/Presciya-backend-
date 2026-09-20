@@ -18,6 +18,8 @@ import institutionDoctorRouter from "../modules/institution/institution-doctor.r
 import { NotificationRouters } from "../modules/notification/notification.router";
 import templateRouter from "../modules/template/template.router";
 import { FinanceRouters } from "../modules/finance/finance.router";
+import { FeeRouters } from "../modules/fee/fee.router";
+import { RevenueRouters } from "../modules/revenue/revenue.router";
 
 const router = Router();
 
@@ -101,6 +103,14 @@ const routes: IRoute[] = [
   {
     path: "/finance",
     route: FinanceRouters,
+  },
+  {
+    path: "/visiting-fee",
+    route: FeeRouters,
+  },
+  {
+    path: "/revenue-share",
+    route: RevenueRouters,
   },
 ];
 

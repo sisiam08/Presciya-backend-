@@ -1,45 +1,71 @@
-import { Router, Request, Response, NextFunction } from "express";
+import { Router } from "express";
 import { AppointmentController } from "./appointment.controller";
 import validateRequest from "../../middleware/validateRequest";
 import { AppointmentValidation } from "./appointment.validation";
 import { authWorkspace } from "../../middleware/auth";
 import { WorkspaceRole } from "../../../generated/prisma/enums";
-import catchAsync from "../../utils/catchAsync";
 import { requireFeatureAccess } from "../../middleware/featureAccess";
 
 const router = Router();
 
-// All routes require workspace context
+const STAFF = [
+  WorkspaceRole.OWNER,
+  WorkspaceRole.ADMIN,
+  WorkspaceRole.DOCTOR,
+  WorkspaceRole.MANAGER,
+  WorkspaceRole.ASSISTANT,
+];
+
+// Create an appointment / follow-up visit (premium feature).
 router.post(
   "/:workspaceId",
-  authWorkspace([
-    WorkspaceRole.OWNER,
-    WorkspaceRole.DOCTOR,
-    WorkspaceRole.ASSISTANT,
-    WorkspaceRole.MANAGER,
-  ]) as any,
-  requireFeatureAccess("appointments", { period: "daily" }) as any,
+  authWorkspace(STAFF) as any,
+  // Entitlement only — the daily limit is enforced in the service by counting
+  // the doctor's appointments for the day across all workspaces.
+  requireFeatureAccess("appointments", {
+    trackUsage: false,
+    incrementBy: 0,
+  }) as any,
   validateRequest(AppointmentValidation.createAppointmentSchema),
-  catchAsync((req: Request, res: Response, next: NextFunction) =>
-    AppointmentController.create(req, res, next),
-  ),
+  AppointmentController.create,
 );
 
+// List appointments for the workspace.
 router.get(
   "/:workspaceId",
   authWorkspace([]) as any,
-  catchAsync((req: Request, res: Response, next: NextFunction) =>
-    AppointmentController.list(req, res, next),
-  ),
+  AppointmentController.list,
 );
 
+// Today's queue (serial / phone / name search).
+router.get(
+  "/:workspaceId/search/today",
+  authWorkspace([]) as any,
+  validateRequest(AppointmentValidation.searchAppointmentsSchema),
+  AppointmentController.searchToday,
+);
+
+// Record payment / discount / free consultation.
+router.post(
+  "/:workspaceId/:id/payment",
+  authWorkspace(STAFF) as any,
+  validateRequest(AppointmentValidation.recordPaymentSchema),
+  AppointmentController.recordPayment,
+);
+
+// Single appointment details.
+router.get(
+  "/:workspaceId/:id",
+  authWorkspace([]) as any,
+  AppointmentController.getOne,
+);
+
+// Update appointment lifecycle status.
 router.patch(
   "/:workspaceId/:id/status",
-  authWorkspace([WorkspaceRole.OWNER, WorkspaceRole.DOCTOR]) as any,
+  authWorkspace(STAFF) as any,
   validateRequest(AppointmentValidation.updateAppointmentStatusSchema),
-  catchAsync((req: Request, res: Response, next: NextFunction) =>
-    AppointmentController.updateStatus(req, res, next),
-  ),
+  AppointmentController.updateStatus,
 );
 
 export const AppointmentRouters = router;
