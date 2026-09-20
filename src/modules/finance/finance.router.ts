@@ -4,6 +4,7 @@ import { FinanceValidation } from "./finance.validation";
 import validateRequest from "../../middleware/validateRequest";
 import { authWorkspace } from "../../middleware/auth";
 import { requirePermission } from "../../middleware/workspace";
+import { requireFeatureAccess } from "../../middleware/featureAccess";
 
 const router = Router();
 
@@ -14,9 +15,18 @@ const router = Router();
 // in "All Workspaces" mode); read operations are gated by the active role here.
 router.use(authWorkspace() as any);
 
+// Finance WRITES are a premium feature (Free plan does not include it), but
+// reads stay open so historical records remain viewable after expiry. Pure
+// entitlement check — no usage counting.
+const requireFinanceFeature = requireFeatureAccess("finance", {
+  trackUsage: false,
+  incrementBy: 0,
+});
+
 // ── Transactions ─────────────────────────────────────────────────────────────
 router.post(
   "/transactions",
+  requireFinanceFeature as any,
   validateRequest(FinanceValidation.createTransactionSchema),
   FinanceControllers.createTransaction,
 );
@@ -36,11 +46,16 @@ router.get(
 
 router.patch(
   "/transactions/:id",
+  requireFinanceFeature as any,
   validateRequest(FinanceValidation.updateTransactionSchema),
   FinanceControllers.updateTransaction,
 );
 
-router.delete("/transactions/:id", FinanceControllers.deleteTransaction);
+router.delete(
+  "/transactions/:id",
+  requireFinanceFeature as any,
+  FinanceControllers.deleteTransaction,
+);
 
 // ── Summary & reports ────────────────────────────────────────────────────────
 router.get(
@@ -67,16 +82,22 @@ router.get(
 
 router.post(
   "/categories",
+  requireFinanceFeature as any,
   validateRequest(FinanceValidation.createCategorySchema),
   FinanceControllers.createCategory,
 );
 
 router.patch(
   "/categories/:id",
+  requireFinanceFeature as any,
   validateRequest(FinanceValidation.updateCategorySchema),
   FinanceControllers.updateCategory,
 );
 
-router.delete("/categories/:id", FinanceControllers.deleteCategory);
+router.delete(
+  "/categories/:id",
+  requireFinanceFeature as any,
+  FinanceControllers.deleteCategory,
+);
 
 export const FinanceRouters = router;

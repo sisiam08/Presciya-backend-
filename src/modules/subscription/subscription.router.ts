@@ -23,6 +23,17 @@ router.get(
   SubscriptionControllers.getMySubscription,
 );
 router.get(
+  "/entitlements",
+  authWorkspace([
+    WorkspaceRole.OWNER,
+    WorkspaceRole.ADMIN,
+    WorkspaceRole.MANAGER,
+    WorkspaceRole.ASSISTANT,
+    WorkspaceRole.DOCTOR,
+  ]) as any,
+  SubscriptionControllers.getEntitlements,
+);
+router.get(
   "/billing-history",
   authWorkspace([WorkspaceRole.OWNER]) as any,
   SubscriptionControllers.getBillingHistory,

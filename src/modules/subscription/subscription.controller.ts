@@ -29,6 +29,21 @@ const getMySubscription = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getEntitlements = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.user?.id as string;
+  const workspaceId = (req as any).workspaceId as string;
+  const result = await SubscriptionServices.getEntitlements({
+    userId,
+    workspaceId,
+  });
+  sendResponse(res, {
+    statusCode: Status.OK,
+    success: true,
+    message: "Feature entitlements fetched successfully",
+    data: result,
+  });
+});
+
 const validateVoucher = catchAsync(async (req: Request, res: Response) => {
   const { voucherCode, subscriptionVariantId } = req.body;
   const result = await SubscriptionServices.validateVoucher(
@@ -101,6 +116,7 @@ const seedDefaultPlans = catchAsync(async (req: Request, res: Response) => {
 export const SubscriptionControllers = {
   getAvailablePlans,
   getMySubscription,
+  getEntitlements,
   validateVoucher,
   createSubscription,
   cancelSubscription,

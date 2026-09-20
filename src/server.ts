@@ -33,6 +33,19 @@ async function main() {
       } else {
         console.log("🚫 Skipping seed in production");
       }
+
+      // Idempotent subscription expiry warnings (3 days before + at expiry).
+      try {
+        const { SubscriptionServices } = await import(
+          "./modules/subscription/subscription.service"
+        );
+        const result = await SubscriptionServices.runExpiryChecks();
+        if (result.created > 0) {
+          console.log(`Subscription expiry warnings created: ${result.created}`);
+        }
+      } catch (expiryError: any) {
+        console.warn("Subscription expiry check warning:", expiryError.message);
+      }
     });
 
     server.on("error", (err) => {

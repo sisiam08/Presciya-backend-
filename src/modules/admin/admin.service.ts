@@ -91,6 +91,38 @@ export const adminService = {  // User management
     });
   },
 
+  /** All platform features (the toggles an admin can attach to a plan). */
+  async listFeatures() {
+    return prisma.feature.findMany({
+      orderBy: [{ category: "asc" }, { key: "asc" }],
+    });
+  },
+
+  /**
+   * Enables/disables a feature for a plan and sets its limit when enabled.
+   * The presence of a PlanFeature row means "enabled"; `limitValue = null`
+   * means "unlimited". There are no hardcoded plan names — this is the single
+   * source of truth for what a plan allows.
+   */
+  async setPlanFeature(
+    variantId: string,
+    featureId: string,
+    enabled: boolean,
+    limitValue: number | null,
+  ) {
+    if (!enabled) {
+      await prisma.planFeature.deleteMany({ where: { variantId, featureId } });
+      return { variantId, featureId, enabled: false, limitValue: null };
+    }
+
+    const row = await prisma.planFeature.upsert({
+      where: { variantId_featureId: { variantId, featureId } },
+      update: { limitValue },
+      create: { variantId, featureId, limitValue },
+    });
+    return { ...row, enabled: true };
+  },
+
   async toggleFeatureFlag(featureId: string, enabled: boolean) {
     return prisma.featureFlag.upsert({
       where: { featureId },

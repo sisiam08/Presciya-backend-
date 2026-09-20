@@ -25,6 +25,10 @@ const FEATURES: {
   { key: "custom_branding", description: "Custom institution branding", category: "branding" },
   { key: "medicine_favorites", description: "Frequently used medicine favorites", category: "medicines" },
   { key: "export", description: "Export prescriptions and records", category: "data" },
+  { key: "max_chambers", description: "Maximum number of chambers", category: "workspaces" },
+  { key: "finance", description: "Internal business finance", category: "finance" },
+  { key: "visiting_fees", description: "Configure visiting / follow-up fees", category: "finance" },
+  { key: "prescription_language", description: "Change prescription language and templates", category: "prescriptions" },
 ];
 
 const VARIANTS: {
@@ -73,9 +77,13 @@ const VARIANTS: {
 
 // Which feature keys each plan variant includes (limitValue = null → unlimited).
 const PLAN_FEATURES: Record<string, { key: string; limit: number | null }[]> = {
+  // Free plan: 1 chamber, limited appointments (15/day) and prescriptions
+  // (3/day). No finance, visiting fees or prescription-language features.
   "Free Trial": [
     { key: "create_prescription", limit: 3 },
+    { key: "appointments", limit: 15 },
     { key: "medicine_favorites", limit: null },
+    { key: "max_chambers", limit: 1 },
   ],
   "Personal Doctor": [
     { key: "create_prescription", limit: 100 },
@@ -85,6 +93,10 @@ const PLAN_FEATURES: Record<string, { key: string; limit: number | null }[]> = {
     { key: "analytics", limit: null },
     { key: "medicine_favorites", limit: null },
     { key: "export", limit: null },
+    { key: "finance", limit: null },
+    { key: "visiting_fees", limit: null },
+    { key: "prescription_language", limit: null },
+    { key: "max_chambers", limit: 3 },
   ],
   "Small Clinic": [
     { key: "create_prescription", limit: 500 },
@@ -95,6 +107,10 @@ const PLAN_FEATURES: Record<string, { key: string; limit: number | null }[]> = {
     { key: "custom_branding", limit: null },
     { key: "medicine_favorites", limit: null },
     { key: "export", limit: null },
+    { key: "finance", limit: null },
+    { key: "visiting_fees", limit: null },
+    { key: "prescription_language", limit: null },
+    { key: "max_chambers", limit: 5 },
   ],
   "Hospital Enterprise": [
     { key: "create_prescription", limit: 9999 },
@@ -105,6 +121,10 @@ const PLAN_FEATURES: Record<string, { key: string; limit: number | null }[]> = {
     { key: "custom_branding", limit: null },
     { key: "medicine_favorites", limit: null },
     { key: "export", limit: null },
+    { key: "finance", limit: null },
+    { key: "visiting_fees", limit: null },
+    { key: "prescription_language", limit: null },
+    { key: "max_chambers", limit: null },
   ],
 };
 

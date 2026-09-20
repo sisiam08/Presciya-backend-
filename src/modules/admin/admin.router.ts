@@ -65,6 +65,43 @@ router.get(
   },
 );
 
+// Platform feature catalog (all toggles an admin can attach to a plan)
+router.get(
+  "/features",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const features = await adminService.listFeatures();
+      res.json(features);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Enable/disable a feature for a plan and set its limit (admin = source of truth)
+router.put(
+  "/plans/:variantId/features/:featureId",
+  requirePermission("manage_plans"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { variantId, featureId } = req.params as {
+        variantId: string;
+        featureId: string;
+      };
+      const { enabled, limitValue } = req.body;
+      const result = await adminService.setPlanFeature(
+        variantId,
+        featureId,
+        Boolean(enabled),
+        limitValue ?? null,
+      );
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 router.post(
   "/plans/:variantId/features/:featureId/limit",
   requirePermission("manage_plans"),

@@ -8,6 +8,7 @@ import { IUpdateDoctorProfile } from "../../interface";
 import sharp from "sharp";
 import { uploadFileToCloudinary } from "../../config/cloudinary.config";
 import { AuthenticatedRequest } from "../../middleware/auth";
+import { FeatureServices } from "../feature/feature.service";
 
 const assignDoctor = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
@@ -119,6 +120,27 @@ const updateDoctorProfile = catchAsync(async (req: Request, res: Response) => {
   await Promise.all(uploadTasks);
 
   const userId = req.user?.id!;
+
+  // Changing the prescription language / template is a premium feature
+  // (admin-configurable per plan). Other profile fields stay free.
+  if (
+    doctorUpdateData.prescriptionLanguage !== undefined ||
+    doctorUpdateData.prescriptionTemplate !== undefined
+  ) {
+    const workspaceId = (req.user as any)?.activeWorkspaceId as
+      | string
+      | undefined;
+    if (workspaceId) {
+      await FeatureServices.checkFeatureAccess({
+        featureKey: "prescription_language",
+        userId,
+        workspaceId,
+        trackUsage: false,
+        incrementBy: 0,
+      });
+    }
+  }
+
   const data = await DoctorServices.updateDoctorProfile(
     doctorUpdateData,
     userId,

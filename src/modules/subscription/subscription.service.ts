@@ -232,6 +232,50 @@ const checkLimit = async (params: {
   };
 };
 
+/**
+ * Enforces the plan's `max_chambers` limit across the workspaces a user owns.
+ * Free plan = 1 chamber; a null limit means unlimited. Called before creating a
+ * chamber so the limit is enforced server-side (never only in the UI).
+ */
+const assertChamberLimit = async (userId: string, workspaceId: string) => {
+  const activePlan = await getActivePlan({ workspaceId, userId });
+  if (!activePlan) return;
+
+  const feature = await prisma.feature.findUnique({
+    where: { key: "max_chambers" },
+  });
+  if (!feature) return;
+
+  const planFeature = await prisma.planFeature.findUnique({
+    where: {
+      variantId_featureId: {
+        variantId: activePlan.variant.id,
+        featureId: feature.id,
+      },
+    },
+  });
+
+  const limit = planFeature?.limitValue ?? null;
+  if (limit === null) return; // unlimited / not configured for this plan
+
+  const owned = await prisma.workspace.findMany({
+    where: { ownerId: userId },
+    select: { id: true },
+  });
+  const count = await prisma.chamber.count({
+    where: { workspaceId: { in: owned.map((w) => w.id) } },
+  });
+
+  if (count >= limit) {
+    throw createAppError(
+      `Your plan allows up to ${limit} chamber${limit === 1 ? "" : "s"}. Upgrade your plan to add more.`,
+      Status.PAYMENT_REQUIRED,
+      true,
+      "CHAMBER_LIMIT_EXCEEDED",
+    );
+  }
+};
+
 // ─── Services ────────────────────────────────────────────────────────────────
 
 /** Returns all available subscription plans that are currently active. */
@@ -273,6 +317,18 @@ const getMySubscription = async (params: {
     });
   }
 
+  // Lazily emit an expiry warning when the user views their subscription, so
+  // warnings appear even without a dedicated scheduler.
+  if (subscription) {
+    notifyExpiryIfDue({
+      id: subscription.id,
+      expiryDate: subscription.expiryDate,
+      userId: subscription.userId,
+      workspaceId: subscription.workspaceId,
+      subscriptionVariant: subscription.subscriptionVariant,
+    }).catch(() => {});
+  }
+
   // Build usage snapshot for today
   const usageTracking = await prisma.usageTracking.findUnique({
     where: {
@@ -300,6 +356,167 @@ const getMySubscription = async (params: {
       percentageUsed,
     },
   };
+};
+
+/**
+ * Returns the workspace's effective plan and per-feature entitlements so the
+ * frontend can gate (and blur) unavailable features. Everything is driven by
+ * the admin-configurable plan feature limits — nothing is hardcoded.
+ */
+const getEntitlements = async (params: {
+  workspaceId: string;
+  userId: string;
+}) => {
+  const { workspaceId, userId } = params;
+  const activePlan = await getActivePlan({ workspaceId, userId });
+
+  if (!activePlan) {
+    return { plan: null, subscription: null, features: {} };
+  }
+
+  const variantId = activePlan.variant.id;
+
+  const [features, planFeatures, usageRows] = await Promise.all([
+    prisma.feature.findMany({
+      select: { id: true, key: true, description: true },
+    }),
+    prisma.planFeature.findMany({
+      where: { variantId },
+      select: { featureId: true, limitValue: true },
+    }),
+    prisma.usageTracking.findMany({ where: { workspaceId } }),
+  ]);
+
+  const limitByFeature = new Map(
+    planFeatures.map((pf) => [pf.featureId, pf.limitValue]),
+  );
+  const usedByKey = new Map(usageRows.map((u) => [u.featureKey, u.used]));
+
+  const featuresResult: Record<
+    string,
+    { allowed: boolean; limit: number | null; used: number; remaining: number | null }
+  > = {};
+
+  for (const f of features) {
+    const allowed = limitByFeature.has(f.id);
+    const limit = allowed ? limitByFeature.get(f.id) ?? null : null;
+    const used = usedByKey.get(f.key) ?? 0;
+    featuresResult[f.key] = {
+      allowed,
+      limit,
+      used,
+      remaining: limit === null ? null : Math.max(0, limit - used),
+    };
+  }
+
+  return {
+    plan: {
+      id: activePlan.variant.id,
+      name: activePlan.variant.variantName,
+      dailyPrescriptionLimit: activePlan.variant.dailyPrescriptionLimit,
+      price: activePlan.variant.price,
+    },
+    subscription: {
+      expiryDate: activePlan.subscription.expiryDate,
+      isActive: activePlan.subscription.isActive,
+    },
+    features: featuresResult,
+  };
+};
+
+// ─── Expiry warnings (idempotent) ────────────────────────────────────────────
+
+const EXPIRY_WARNING_DAYS = 3;
+
+/**
+ * Creates an expiry-warning notification for a subscription if one is due and
+ * not already sent. Recipients: the workspace owner for workspace
+ * subscriptions (hospitals/clinics notify their owner — never individual
+ * doctors), or the user for personal subscriptions. Idempotent via a
+ * deterministic title.
+ */
+const notifyExpiryIfDue = async (sub: {
+  id: string;
+  expiryDate: Date;
+  userId: string | null;
+  workspaceId: string | null;
+  subscriptionVariant?: { variantName: string } | null;
+}): Promise<boolean> => {
+  const now = new Date();
+  const warnUntil = new Date(
+    now.getTime() + EXPIRY_WARNING_DAYS * 24 * 60 * 60 * 1000,
+  );
+  if (sub.expiryDate > warnUntil) return false; // not due yet
+
+  let recipientId = sub.userId;
+  if (sub.workspaceId) {
+    const ws = await prisma.workspace.findUnique({
+      where: { id: sub.workspaceId },
+      select: { ownerId: true },
+    });
+    recipientId = ws?.ownerId ?? sub.userId;
+  }
+  if (!recipientId) return false;
+
+  const expired = sub.expiryDate <= now;
+  const expiryLabel = sub.expiryDate.toISOString().slice(0, 10);
+  const planName = sub.subscriptionVariant?.variantName ?? "subscription";
+  const title = expired
+    ? `Subscription expired (${expiryLabel})`
+    : `Subscription expires soon (${expiryLabel})`;
+  const message = expired
+    ? `Your ${planName} plan has expired. Premium features (appointments, finance) are now disabled. Your data is safe — renew to restore access.`
+    : `Your ${planName} plan expires on ${expiryLabel}. Renew to keep premium features.`;
+
+  const existing = await prisma.notification.findFirst({
+    where: { userId: recipientId, title },
+    select: { id: true },
+  });
+  if (existing) return false;
+
+  await NotificationServices.createNotification({
+    userId: recipientId,
+    title,
+    message,
+    type: NotificationType.SUBSCRIPTION,
+  });
+  return true;
+};
+
+/**
+ * Scans active subscriptions for upcoming/at expiry and issues warnings.
+ * Safe to call repeatedly (idempotent). Intended to be run by a scheduler and
+ * on server bootstrap.
+ */
+const runExpiryChecks = async () => {
+  const now = new Date();
+  const warnUntil = new Date(
+    now.getTime() + EXPIRY_WARNING_DAYS * 24 * 60 * 60 * 1000,
+  );
+
+  const subs = await prisma.subscription.findMany({
+    where: { isActive: true, expiryDate: { lte: warnUntil } },
+    select: {
+      id: true,
+      expiryDate: true,
+      userId: true,
+      workspaceId: true,
+      subscriptionVariant: { select: { variantName: true } },
+    },
+  });
+
+  let created = 0;
+  for (const sub of subs) {
+    if (await notifyExpiryIfDue(sub)) created++;
+  }
+
+  // Fall back to the Free plan: deactivate expired subscriptions (data is kept).
+  await prisma.subscription.updateMany({
+    where: { isActive: true, expiryDate: { lt: now } },
+    data: { isActive: false },
+  });
+
+  return { scanned: subs.length, created };
 };
 
 /** Validates a voucher code and returns discount information. */
@@ -599,11 +816,15 @@ const seedDefaultPlans = async () => {
 export const SubscriptionServices = {
   getActivePlan,
   checkLimit,
+  assertChamberLimit,
   getAvailablePlans,
   getMySubscription,
+  getEntitlements,
   validateVoucher,
   createSubscription,
   cancelSubscription,
   getBillingHistory,
   seedDefaultPlans,
+  runExpiryChecks,
+  notifyExpiryIfDue,
 };
