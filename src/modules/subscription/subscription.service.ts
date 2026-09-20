@@ -19,6 +19,21 @@ const getPeriodStart = (period: FeaturePeriod): Date => {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
 };
 
+/**
+ * Effective usage for the current period. A usage row whose `resetAt` is older
+ * than the current period start belongs to a previous period, so its counter
+ * must not count towards the current one (yesterday's 5/10 becomes today's
+ * 0/10). Every reader of `used` goes through this so a stale previous-day count
+ * can never surface; `checkLimit` additionally persists the rollover.
+ */
+const getEffectiveUsed = (
+  usage: { used: number; resetAt: Date } | null | undefined,
+  period: FeaturePeriod = "daily",
+): number => {
+  if (!usage) return 0;
+  return usage.resetAt < getPeriodStart(period) ? 0 : usage.used;
+};
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 const generateInvoiceNumber = async (): Promise<string> => {
@@ -194,6 +209,8 @@ const checkLimit = async (params: {
       },
     });
   } else if (usage.resetAt < periodStart) {
+    // A new period has started (e.g. a new calendar day): reset the counter so
+    // yesterday's usage is never counted towards today's limit.
     usage = await prisma.usageTracking.update({
       where: { workspaceId_featureKey: { workspaceId, featureKey } },
       data: {
@@ -204,11 +221,12 @@ const checkLimit = async (params: {
   }
 
   const limitValue = planFeature.limitValue;
-  const nextUsed = usage.used + incrementBy;
+  const usedNow = getEffectiveUsed(usage, period);
+  const nextUsed = usedNow + incrementBy;
 
   if (limitValue !== null && nextUsed > limitValue) {
     throw createAppError(
-      `Feature limit exceeded (${usage.used}/${limitValue}). Please upgrade your plan.`,
+      `Feature limit exceeded (${usedNow}/${limitValue}). Please upgrade your plan.`,
       Status.PAYMENT_REQUIRED,
       true,
       "QUOTA_EXCEEDED",
@@ -216,19 +234,46 @@ const checkLimit = async (params: {
   }
 
   if (trackUsage && incrementBy > 0) {
-    usage = await prisma.usageTracking.update({
-      where: { workspaceId_featureKey: { workspaceId, featureKey } },
+    // Guarded increment: the WHERE clause re-checks the quota in a single
+    // atomic statement, so two concurrent requests cannot both read the same
+    // old value and together exceed the limit.
+    const incremented = await prisma.usageTracking.updateMany({
+      where: {
+        workspaceId,
+        featureKey,
+        ...(limitValue === null
+          ? {}
+          : { used: { lte: limitValue - incrementBy } }),
+      },
       data: { used: { increment: incrementBy } },
     });
+
+    if (incremented.count === 0) {
+      const current = await prisma.usageTracking.findUnique({
+        where: { workspaceId_featureKey: { workspaceId, featureKey } },
+      });
+      throw createAppError(
+        `Feature limit exceeded (${current?.used ?? usedNow}/${limitValue}). Please upgrade your plan.`,
+        Status.PAYMENT_REQUIRED,
+        true,
+        "QUOTA_EXCEEDED",
+      );
+    }
+
+    usage =
+      (await prisma.usageTracking.findUnique({
+        where: { workspaceId_featureKey: { workspaceId, featureKey } },
+      })) ?? usage;
   }
+
+  const used = getEffectiveUsed(usage, period);
 
   return {
     featureId,
     featureKey,
     limitValue,
-    used: usage.used,
-    remaining:
-      limitValue === null ? null : Math.max(0, limitValue - usage.used),
+    used,
+    remaining: limitValue === null ? null : Math.max(0, limitValue - used),
   };
 };
 
@@ -342,7 +387,9 @@ const getMySubscription = async (params: {
   const dailyLimit =
     subscription?.subscriptionVariant.dailyPrescriptionLimit ?? 0;
 
-  const usedToday = usageTracking?.used ?? 0;
+  // Counts today's usage only — a row left over from a previous calendar day
+  // resolves to 0 until the next action rolls it over.
+  const usedToday = getEffectiveUsed(usageTracking);
 
   const percentageUsed =
     dailyLimit > 0 ? Math.round((usedToday / dailyLimit) * 100) : 0;
@@ -390,7 +437,11 @@ const getEntitlements = async (params: {
   const limitByFeature = new Map(
     planFeatures.map((pf) => [pf.featureId, pf.limitValue]),
   );
-  const usedByKey = new Map(usageRows.map((u) => [u.featureKey, u.used]));
+  // Resolve each row against the current period so a previous day's usage is
+  // reported as 0 rather than reused.
+  const usedByKey = new Map(
+    usageRows.map((u) => [u.featureKey, getEffectiveUsed(u)]),
+  );
 
   const featuresResult: Record<
     string,
