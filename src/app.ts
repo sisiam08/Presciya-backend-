@@ -7,6 +7,7 @@ import { notFound } from "./middleware/notFound";
 import globalErrorHandler from "./middleware/globalErrorHandler";
 import { generalLimiter } from "./middleware/rateLimiter";
 import { requestId, requestLogger } from "./middleware/requestContext";
+import config from "./config";
 
 const app: Application = express();
 
@@ -20,7 +21,9 @@ app.use(helmet());
 // "Network Error" and the client cannot read the real status.
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    // Explicit allow-list from configuration (FRONTEND_URL / CORS_ORIGIN).
+    // Never "*" — credentialed cookie requests would be rejected by browsers.
+    origin: config.cors.origins,
     credentials: true,
   }),
 );

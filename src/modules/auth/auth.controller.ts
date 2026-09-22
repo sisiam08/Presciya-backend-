@@ -1,49 +1,50 @@
-import { Request, Response } from "express";
+import { CookieOptions, Request, Response } from "express";
 import catchAsync from "../../utils/catchAsync";
 import { AuthServices } from "./auth.service";
 import sendResponse from "../../utils/sendResponse";
 import { Status } from "../../errors/httpStatus";
 import { createAppError } from "../../errors/appError";
+import config from "../../config";
+
+/**
+ * Cookie attributes come from the validated configuration. Max-age always
+ * matches the corresponding token lifetime, so a cookie can never outlive its
+ * token.
+ */
+const cookieBaseOptions = (): CookieOptions => ({
+  secure: config.cookie.secure,
+  sameSite: config.cookie.sameSite,
+  path: config.cookie.path,
+  ...(config.cookie.domain ? { domain: config.cookie.domain } : {}),
+});
 
 const setCookies = (
   res: Response,
   accessToken: string,
   refreshToken: string,
 ) => {
-  const isProduction = process.env.NODE_ENV === "production";
+  const base = cookieBaseOptions();
 
-  const cookieOptions = {
-    secure: isProduction,
-    httpOnly: true,
-    sameSite: isProduction ? "strict" : ("lax" as const),
-    path: "/",
-  } as const;
-
-  res.cookie("accessToken", accessToken, {
-    ...cookieOptions,
+  res.cookie(config.cookie.accessName, accessToken, {
+    ...base,
+    // Readable by the Next.js proxy, which verifies the token server-side.
     httpOnly: false,
-    maxAge: 1000 * 60 * 60,
+    maxAge: config.cookie.accessMaxAge,
   });
 
-  res.cookie("refreshToken", refreshToken, {
-    ...cookieOptions,
+  res.cookie(config.cookie.refreshName, refreshToken, {
+    ...base,
+    // Never exposed to browser JavaScript.
     httpOnly: true,
-    maxAge: 1000 * 60 * 60 * 24 * 7,
+    maxAge: config.cookie.refreshMaxAge,
   });
 };
 
 const clearCookies = (res: Response) => {
-  const isProduction = process.env.NODE_ENV === "production";
+  const base = cookieBaseOptions();
 
-  const cookieOptions = {
-    secure: isProduction,
-    httpOnly: true,
-    sameSite: isProduction ? "strict" : ("lax" as const),
-    path: "/",
-  } as const;
-
-  res.clearCookie("accessToken", cookieOptions);
-  res.clearCookie("refreshToken", cookieOptions);
+  res.clearCookie(config.cookie.accessName, { ...base, httpOnly: false });
+  res.clearCookie(config.cookie.refreshName, { ...base, httpOnly: true });
 };
 
 const sendOTP = catchAsync(async (req: Request, res: Response) => {

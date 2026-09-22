@@ -3,6 +3,7 @@ import { ZodError } from "zod";
 import { Prisma } from "../../generated/prisma/client";
 
 import { v2 as cloudinary } from "cloudinary";
+import config from "../config";
 
 function globalErrorHandler(
   err: any,
@@ -126,7 +127,7 @@ function globalErrorHandler(
       }),
     );
 
-    if (process.env.NODE_ENV === "production") {
+    if (config.isProduction) {
       errorMessage = "Internal server error";
     }
   }

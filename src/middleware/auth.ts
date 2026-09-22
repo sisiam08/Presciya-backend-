@@ -51,14 +51,21 @@ export const auth = (
 
       let user: IAuthorizedUser;
       try {
-        user = jwt.verify(token, config.jwt.jwtSecret) as IAuthorizedUser;
+        user = jwt.verify(token, config.accessToken.secret, {
+      issuer: config.jwt.issuer,
+      audience: config.jwt.audience,
+    }) as IAuthorizedUser;
       } catch (error) {
-        if (error instanceof jwt.TokenExpiredError) {
-          throw createAppError(
-            "Token has expired, please log in again",
-            Status.UNAUTHORIZED,
-          );
-        }
+    if (error instanceof jwt.TokenExpiredError) {
+      // Explicit code so clients can distinguish "expired, refresh me" from
+      // "invalid, do not trust" without parsing the message.
+      throw createAppError(
+        "Token has expired, please log in again",
+        Status.UNAUTHORIZED,
+        true,
+        "TOKEN_EXPIRED",
+      );
+    }
         if (error instanceof jwt.JsonWebTokenError) {
           throw createAppError("Invalid token", Status.UNAUTHORIZED);
         }
@@ -221,14 +228,21 @@ export const authOnly = () => {
 
       let user: IAuthorizedUser;
       try {
-        user = jwt.verify(token, config.jwt.jwtSecret) as IAuthorizedUser;
+        user = jwt.verify(token, config.accessToken.secret, {
+      issuer: config.jwt.issuer,
+      audience: config.jwt.audience,
+    }) as IAuthorizedUser;
       } catch (error) {
-        if (error instanceof jwt.TokenExpiredError) {
-          throw createAppError(
-            "Token has expired, please log in again",
-            Status.UNAUTHORIZED,
-          );
-        }
+    if (error instanceof jwt.TokenExpiredError) {
+      // Explicit code so clients can distinguish "expired, refresh me" from
+      // "invalid, do not trust" without parsing the message.
+      throw createAppError(
+        "Token has expired, please log in again",
+        Status.UNAUTHORIZED,
+        true,
+        "TOKEN_EXPIRED",
+      );
+    }
         if (error instanceof jwt.JsonWebTokenError) {
           throw createAppError("Invalid token", Status.UNAUTHORIZED);
         }
@@ -294,14 +308,21 @@ export const authWorkspace = (
 
       let user: ITokenPayload;
       try {
-        user = jwt.verify(token, config.jwt.jwtSecret) as ITokenPayload;
+        user = jwt.verify(token, config.accessToken.secret, {
+      issuer: config.jwt.issuer,
+      audience: config.jwt.audience,
+    }) as ITokenPayload;
       } catch (error) {
-        if (error instanceof jwt.TokenExpiredError) {
-          throw createAppError(
-            "Token has expired, please log in again",
-            Status.UNAUTHORIZED,
-          );
-        }
+    if (error instanceof jwt.TokenExpiredError) {
+      // Explicit code so clients can distinguish "expired, refresh me" from
+      // "invalid, do not trust" without parsing the message.
+      throw createAppError(
+        "Token has expired, please log in again",
+        Status.UNAUTHORIZED,
+        true,
+        "TOKEN_EXPIRED",
+      );
+    }
         if (error instanceof jwt.JsonWebTokenError) {
           throw createAppError("Invalid token", Status.UNAUTHORIZED);
         }

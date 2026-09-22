@@ -72,15 +72,18 @@ const generateTokens = (user: {
   const accessToken = jwt.sign(
     {
       id: user.userId,
+      // Authoritative role from the user record — never from client state.
       systemRole: user.systemRole,
       workspaceType: user.workspaceType,
       workspaceRole: user.workspaceRole,
       activeWorkspaceId: user.activeWorkspaceId,
       jti: crypto.randomUUID(),
     },
-    config.jwt.jwtSecret,
+    config.accessToken.secret,
     {
-      expiresIn: "1h",
+      expiresIn: config.accessToken.expiresIn,
+      issuer: config.jwt.issuer,
+      audience: config.jwt.audience,
     },
   );
 
@@ -96,9 +99,11 @@ const generateTokens = (user: {
       activeWorkspaceId: user.activeWorkspaceId,
       jti: crypto.randomUUID(),
     },
-    config.jwt.jwtSecret,
+    config.refreshToken.secret,
     {
-      expiresIn: "7d",
+      expiresIn: config.refreshToken.expiresIn,
+      issuer: config.jwt.issuer,
+      audience: config.jwt.audience,
     },
   );
 
@@ -116,7 +121,7 @@ const sendOTP = async (name: string, email: string) => {
   }
 
   const otp = generateOTP();
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+  const expiresAt = new Date(Date.now() + config.otp.expiresInMs);
 
   try {
     await prisma.oTP.deleteMany({
@@ -159,7 +164,7 @@ const sendOTP = async (name: string, email: string) => {
     message:
       "OTP sent successfully to your email. Please verify to complete signup.",
     email,
-    expiresIn: "15 minutes",
+    expiresIn: `${Math.round(config.otp.expiresInMs / 60000)} minutes`,
   };
 };
 
@@ -465,7 +470,7 @@ const logIn = async (
         refreshToken,
         deviceInfo: deviceInfo ?? null,
         ipAddress: ipAddress ?? null,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + config.session.expiresInMs),
       },
     });
 
@@ -535,7 +540,7 @@ const logIn = async (
         refreshToken,
         deviceInfo: deviceInfo ?? null,
         ipAddress: ipAddress ?? null,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + config.session.expiresInMs),
       },
     });
 
@@ -594,7 +599,7 @@ const logIn = async (
         refreshToken,
         deviceInfo: deviceInfo ?? null,
         ipAddress: ipAddress ?? null,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + config.session.expiresInMs),
       },
     });
 
@@ -657,7 +662,7 @@ const logIn = async (
         refreshToken,
         deviceInfo: deviceInfo ?? null,
         ipAddress: ipAddress ?? null,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + config.session.expiresInMs),
       },
     });
 
@@ -800,7 +805,7 @@ const switchWorkspace = async (
       refreshToken,
       deviceInfo: deviceInfo ?? null,
       ipAddress: ipAddress ?? null,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      expiresAt: new Date(Date.now() + config.session.expiresInMs),
     },
   });
 
@@ -855,7 +860,12 @@ const refreshToken = async (
 ) => {
   let decoded: any;
   try {
-    decoded = jwt.verify(token, config.jwt.jwtSecret);
+    // Refresh tokens are verified with the refresh secret only, so an access
+    // token can never be replayed as a refresh token (and vice versa).
+    decoded = jwt.verify(token, config.refreshToken.secret, {
+      issuer: config.jwt.issuer,
+      audience: config.jwt.audience,
+    });
   } catch (error) {
     throw createAppError("Invalid refresh token", Status.UNAUTHORIZED);
   }
@@ -951,11 +961,17 @@ const forgetPassword = async (email: string) => {
     throw createAppError("User not found with this email", Status.NOT_FOUND);
   }
 
-  // Generate a secure short-lived reset token (expires in 15m)
+  // Short-lived, single-purpose reset token. It rides on the access-token
+  // secret (same identity-JWT family) with its own independently configured
+  // lifetime.
   const resetToken = jwt.sign(
     { id: user.id, purpose: "reset_password" },
-    config.jwt.jwtSecret,
-    { expiresIn: "15m" },
+    config.accessToken.secret,
+    {
+      expiresIn: config.passwordReset.expiresIn,
+      issuer: config.jwt.issuer,
+      audience: config.jwt.audience,
+    },
   );
 
   // Generate reset URL with token
@@ -986,7 +1002,10 @@ const forgetPassword = async (email: string) => {
 const resetPassword = async (token: string, newPassword: string) => {
   let decoded: any;
   try {
-    decoded = jwt.verify(token, config.jwt.jwtSecret);
+    decoded = jwt.verify(token, config.accessToken.secret, {
+      issuer: config.jwt.issuer,
+      audience: config.jwt.audience,
+    });
   } catch (error) {
     throw createAppError("Invalid or expired reset token", Status.UNAUTHORIZED);
   }

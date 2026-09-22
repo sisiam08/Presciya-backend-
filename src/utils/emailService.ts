@@ -133,7 +133,7 @@ const sendInvitationEmail = async (
   dummyPassword?: string,
   isNewUser?: boolean,
 ): Promise<void> => {
-  const invitationUrl = `${process.env.FRONTEND_URL || "http://localhost:3000"}/invitations/${invitationToken}`;
+  const invitationUrl = `${config.frontendUrl}/invitations/${invitationToken}`;
 
   const credentialsSection =
     isNewUser && dummyPassword

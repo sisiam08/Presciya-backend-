@@ -43,7 +43,11 @@ router.patch(
   AuthControllers.updateMe,
 );
 
-router.post("/logout", authOnly(), AuthControllers.logOut);
+// Logout must ALWAYS be able to tear the session down — including when the
+// access token has already expired (the handler only needs the refresh cookie,
+// which is what it invalidates). Requiring a valid access token here left the
+// httpOnly refresh cookie in place and the session un-revocable.
+router.post("/logout", AuthControllers.logOut);
 
 router.post("/logout-all", authOnly(), AuthControllers.logoutAll);
 
