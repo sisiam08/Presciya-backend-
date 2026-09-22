@@ -7,6 +7,7 @@ import { requireStringParam } from "../../utils/requestParams";
 import {
   chamberIdFromRequest,
   resolveChamberScope,
+  resolveRequestScope,
 } from "../../utils/chamberScope";
 import {
   WorkspaceRole,
@@ -36,7 +37,8 @@ const createPrescription = catchAsync(async (req: Request, res: Response) => {
 const getPrescriptionById = catchAsync(async (req: Request, res: Response) => {
   const id = requireStringParam(req.params.id, "Prescription ID");
   const workspaceId = (req as any).workspaceId as string;
-  const result = await PrescriptionServices.getPrescriptionById(id, workspaceId);
+  const scope = await resolveRequestScope(req.user?.id as string, workspaceId, req);
+  const result = await PrescriptionServices.getPrescriptionById(id, workspaceId, scope);
 
   sendResponse(res, {
     statusCode: Status.OK,
@@ -50,11 +52,13 @@ const updatePrescription = catchAsync(async (req: Request, res: Response) => {
   const id = requireStringParam(req.params.id, "Prescription ID");
   const userId = req.user?.id as string;
   const workspaceId = (req as any).workspaceId as string;
+  const scope = await resolveRequestScope(req.user?.id as string, workspaceId, req);
   const result = await PrescriptionServices.updatePrescription(
     id,
     userId,
     workspaceId,
     req.body,
+    scope,
   );
 
   sendResponse(res, {
@@ -69,7 +73,8 @@ const deletePrescription = catchAsync(async (req: Request, res: Response) => {
   const id = requireStringParam(req.params.id, "Prescription ID");
   const userId = req.user?.id as string;
   const workspaceId = (req as any).workspaceId as string;
-  await PrescriptionServices.deletePrescription(id, userId, workspaceId);
+  const scope = await resolveRequestScope(req.user?.id as string, workspaceId, req);
+  await PrescriptionServices.deletePrescription(id, userId, workspaceId, scope);
 
   sendResponse(res, {
     statusCode: Status.OK,
@@ -87,10 +92,7 @@ const getMyPrescriptions = catchAsync(async (req: Request, res: Response) => {
 
   // Chamber isolation: the current chamber (or the personal scope) is resolved
   // and validated against the caller's workspace before the query runs.
-  const chamberId = await resolveChamberScope(
-    workspaceId,
-    chamberIdFromRequest(req),
-  );
+  const scope = await resolveRequestScope(req.user?.id as string, workspaceId, req);
 
   const result = await PrescriptionServices.getMyPrescriptions(
     userId,
@@ -98,7 +100,7 @@ const getMyPrescriptions = catchAsync(async (req: Request, res: Response) => {
     workspaceId,
     {
       patientPhone: patientPhone as string,
-      chamberId,
+      scope,
     },
     Number(page),
     Number(limit),
@@ -155,10 +157,12 @@ const amendPrescription = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.id as string;
   const workspaceId = (req as any).workspaceId as string;
 
+  const scope = await resolveRequestScope(req.user?.id as string, workspaceId, req);
   const result = await PrescriptionServices.amendPrescription(
     id,
     userId,
     workspaceId,
+    scope,
   );
 
   sendResponse(res, {
@@ -174,7 +178,8 @@ const previewPrescription = catchAsync(async (req: Request, res: Response) => {
   const workspaceId = (req as any).workspaceId as string;
 
   // Canonical A4 layout (same renderer as print), authenticated & workspace-scoped.
-  const html = await PrescriptionServices.previewPrescription(id, workspaceId);
+  const scope = await resolveRequestScope(req.user?.id as string, workspaceId, req);
+  const html = await PrescriptionServices.previewPrescription(id, workspaceId, scope);
 
   res.setHeader("Content-Type", "text/html");
   res.status(Status.OK).send(html);

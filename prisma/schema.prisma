@@ -1097,8 +1097,13 @@ model Appointment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([workspaceId, appointmentDate, serialNo])
+  // Serial numbers are per OPERATIONAL CHAMBER, per day: Chamber A and Chamber
+  // B each have their own 1, 2, 3… sequence. Personal (chamber-less)
+  // appointments are kept unique per workspace by a partial index created in
+  // the migration (a nullable column cannot enforce uniqueness by itself).
+  @@unique([chamberId, appointmentDate, serialNo])
   @@index([workspaceId])
+  @@index([chamberId])
   @@index([doctorId])
   @@index([patientId])
   @@index([appointmentDate])

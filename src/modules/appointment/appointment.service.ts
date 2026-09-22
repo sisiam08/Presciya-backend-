@@ -1,5 +1,10 @@
 import { prisma } from "../../lib/prisma";
-import { chamberScopeFilter } from "../../utils/chamberScope";
+import {
+  chamberScopeFilter,
+  recordInScope,
+  scopeFilter,
+  type RequestScope,
+} from "../../utils/chamberScope";
 import { createAppError } from "../../errors/appError";
 import { Status } from "../../errors/httpStatus";
 import {
@@ -138,10 +143,12 @@ const buildFeeSnapshot = async (
   // global doctor fee. A personal (chamber-less) appointment has no fee.
   const config = await FeeServices.getFeeConfig(doctorId, chamberId);
 
-  // Follow-up uses the follow-up fee when configured, else the normal fee.
+  // The fee follows the VISIT TYPE: a follow-up is charged the follow-up fee
+  // (0 when the chamber has none configured) and a normal visit the visiting
+  // fee. A follow-up must never silently fall back to the visiting fee.
   const base =
-    appointmentType === AppointmentType.FOLLOW_UP && config?.followUpFee
-      ? Number(config.followUpFee)
+    appointmentType === AppointmentType.FOLLOW_UP
+      ? Number(config?.followUpFee ?? 0)
       : Number(config?.visitingFee ?? 0);
 
   const discount = Math.min(Math.max(discountInput, 0), base);
@@ -218,11 +225,14 @@ const assertDailyAppointmentLimit = async (
 
 const generateSerial = async (
   workspaceId: string,
+  chamberId: string | null,
   appointmentDate: Date,
 ): Promise<number> => {
   const last = await prisma.appointment.findFirst({
     where: {
       workspaceId,
+      // Serials are per operational chamber (or the personal scope).
+      ...chamberScopeFilter(chamberId),
       appointmentDate: {
         gte: dayStart(appointmentDate),
         lt: nextDay(appointmentDate),
@@ -378,7 +388,8 @@ const createAppointment = async (
         );
 
         const serialNo =
-          (await generateSerial(workspaceId, appointmentDate)) + attempt;
+          (await generateSerial(workspaceId, data.chamberId ?? null, appointmentDate)) +
+        attempt;
 
         return tx.appointment.create({
           data: {
@@ -480,12 +491,13 @@ const recordPayment = async (
     markFree?: boolean | undefined;
   },
   meta?: { ipAddress?: string | undefined; userAgent?: string | undefined },
+  scope?: RequestScope,
 ) => {
   const appt = await prisma.appointment.findUnique({
     where: { id: appointmentId },
     include: { patient: { select: { name: true } } },
   });
-  if (!appt || appt.workspaceId !== workspaceId) {
+  if (!appt || (scope ? !recordInScope(appt, scope) : appt.workspaceId !== workspaceId)) {
     throw createAppError("Appointment not found", Status.NOT_FOUND);
   }
 
@@ -662,7 +674,7 @@ const listAppointments = async (
     from?: Date;
     to?: Date;
     date?: string;
-    chamberId?: string | null;
+    scope?: RequestScope;
   },
   page: unknown = 1,
   limit: unknown = 20,
@@ -673,19 +685,27 @@ const listAppointments = async (
   );
 
   const where: any = { workspaceId };
-  // Chamber isolation: the current chamber, or the personal scope.
-  if (filters.chamberId !== undefined) {
-    Object.assign(where, chamberScopeFilter(filters.chamberId));
+  // Scope: the current chamber/personal context, or every authorized
+  // workspace in All Workspaces mode.
+  if (filters.scope) {
+    Object.assign(where, scopeFilter(filters.scope));
   }
   if (filters.doctorId) where.doctorId = filters.doctorId;
   if (filters.patientId) where.patientId = filters.patientId;
   if (filters.date) {
+    // An explicit date is the user intentionally requesting that day.
     const d = parseDate(filters.date);
     where.appointmentDate = { gte: dayStart(d), lt: nextDay(d) };
   } else if (filters.from || filters.to) {
     where.appointmentDate = {};
     if (filters.from) where.appointmentDate.gte = filters.from;
     if (filters.to) where.appointmentDate.lte = filters.to;
+  } else {
+    // DEFAULT: today only. The appointment list is a daily queue — it must
+    // never mix other days' appointments into the default view. Other days
+    // stay reachable by requesting them explicitly (`date` or `from`/`to`).
+    const today = new Date();
+    where.appointmentDate = { gte: dayStart(today), lt: nextDay(today) };
   }
 
   const [items, total] = await Promise.all([
@@ -716,9 +736,16 @@ const listAppointments = async (
   };
 };
 
-const getAppointment = async (appointmentId: string, workspaceId: string) => {
+const getAppointment = async (
+  appointmentId: string,
+  workspaceId: string,
+  scope?: RequestScope,
+) => {
   const appt = await prisma.appointment.findFirst({
-    where: { id: appointmentId, workspaceId },
+    where: {
+      id: appointmentId,
+      ...(scope ? (scopeFilter(scope) as any) : { workspaceId }),
+    },
     include: {
       patient: true,
       doctor: { select: { id: true, name: true } },
@@ -736,13 +763,14 @@ const updateStatus = async (
   workspaceId: string,
   status: AppointmentStatus,
   cancelReason?: string,
+  scope?: RequestScope,
 ) => {
   await checkUserVerification(userId);
 
   const appt = await prisma.appointment.findUnique({
     where: { id: appointmentId },
   });
-  if (!appt || appt.workspaceId !== workspaceId) {
+  if (!appt || (scope ? !recordInScope(appt, scope) : appt.workspaceId !== workspaceId)) {
     throw createAppError("Appointment not found", Status.NOT_FOUND);
   }
 

@@ -6,6 +6,7 @@ import { requireStringParam } from "../../utils/requestParams";
 import {
   chamberIdFromRequest,
   resolveChamberScope,
+  resolveRequestScope,
 } from "../../utils/chamberScope";
 import { AppointmentService } from "./appointment.service";
 
@@ -35,12 +36,14 @@ const recordPayment = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.id as string;
   const workspaceId = (req as any).workspaceId as string;
   const id = requireStringParam(req.params.id, "Appointment ID");
+  const scope = await resolveRequestScope(req.user?.id as string, workspaceId, req);
   const updated = await AppointmentService.recordPayment(
     id,
     userId,
     workspaceId,
     req.body,
     meta(req),
+    scope,
   );
   sendResponse(res, {
     statusCode: Status.OK,
@@ -72,7 +75,8 @@ const searchToday = catchAsync(async (req: Request, res: Response) => {
 const getOne = catchAsync(async (req: Request, res: Response) => {
   const workspaceId = (req as any).workspaceId as string;
   const id = requireStringParam(req.params.id, "Appointment ID");
-  const appointment = await AppointmentService.getAppointment(id, workspaceId);
+  const scope = await resolveRequestScope(req.user?.id as string, workspaceId, req);
+  const appointment = await AppointmentService.getAppointment(id, workspaceId, scope);
   sendResponse(res, {
     statusCode: Status.OK,
     success: true,
@@ -86,12 +90,14 @@ const updateStatus = catchAsync(async (req: Request, res: Response) => {
   const workspaceId = (req as any).workspaceId as string;
   const { id } = req.params as { id: string };
   const { status, cancelReason } = req.body;
+  const scope = await resolveRequestScope(req.user?.id as string, workspaceId, req);
   const updated = await AppointmentService.updateStatus(
     id,
     userId,
     workspaceId,
     status,
     cancelReason,
+    scope,
   );
   sendResponse(res, {
     statusCode: Status.OK,
@@ -104,13 +110,10 @@ const updateStatus = catchAsync(async (req: Request, res: Response) => {
 const list = catchAsync(async (req: Request, res: Response) => {
   const workspaceId = (req as any).workspaceId as string;
   const { doctorId, patientId, from, to, date, page, limit } = req.query as any;
-  // Chamber isolation: resolved from the current context and validated against
-  // the caller's workspace before the query runs.
-  const chamberId = await resolveChamberScope(
-    workspaceId,
-    chamberIdFromRequest(req),
-  );
-  const filters: any = { doctorId, patientId, date, chamberId };
+  // Data scope: current chamber/personal, or all authorized workspaces when
+  // All Workspaces was explicitly selected.
+  const scope = await resolveRequestScope(req.user?.id as string, workspaceId, req);
+  const filters: any = { doctorId, patientId, date, scope };
   if (from) filters.from = new Date(from);
   if (to) filters.to = new Date(to);
   const data = await AppointmentService.listAppointments(

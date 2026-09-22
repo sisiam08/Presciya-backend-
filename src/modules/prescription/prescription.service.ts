@@ -1,5 +1,9 @@
 import crypto from "crypto";
 import { prisma } from "../../lib/prisma";
+import {
+  scopeFilter,
+  type RequestScope,
+} from "../../utils/chamberScope";
 import { createAppError } from "../../errors/appError";
 import { Status } from "../../errors/httpStatus";
 import {
@@ -313,11 +317,19 @@ const createPrescription = async (
   });
 };
 
-const getPrescriptionById = async (id: string, workspaceId: string) => {
+const getPrescriptionById = async (
+  id: string,
+  workspaceId: string,
+  scope?: RequestScope,
+) => {
   // Workspace-scoped lookup: an OWNER of one workspace must never read another
   // workspace's prescription by guessing its ID (Section 6.4).
   const prescription = await prisma.prescription.findFirst({
-    where: { id, workspaceId, isDeleted: false },
+    where: {
+        id,
+        ...(scope ? (scopeFilter(scope) as any) : { workspaceId }),
+        isDeleted: false,
+      },
     include: {
       prescriptionMedicines: true,
       clinicalObservations: true,
@@ -342,12 +354,17 @@ const updatePrescription = async (
   userId: string,
   workspaceId: string,
   data: any,
+  scope?: RequestScope,
 ) => {
   // Check if user is verified to perform this action
   await checkUserVerification(userId);
 
   const prescription = await prisma.prescription.findFirst({
-    where: { id, workspaceId, isDeleted: false },
+    where: {
+        id,
+        ...(scope ? (scopeFilter(scope) as any) : { workspaceId }),
+        isDeleted: false,
+      },
   });
 
   if (!prescription) {
@@ -505,12 +522,17 @@ const deletePrescription = async (
   id: string,
   userId: string,
   workspaceId: string,
+  scope?: RequestScope,
 ) => {
   // Check if user is verified to perform this action
   await checkUserVerification(userId);
 
   const prescription = await prisma.prescription.findFirst({
-    where: { id, workspaceId, isDeleted: false },
+    where: {
+        id,
+        ...(scope ? (scopeFilter(scope) as any) : { workspaceId }),
+        isDeleted: false,
+      },
   });
 
   if (!prescription) {
@@ -553,7 +575,7 @@ const getMyPrescriptions = async (
   userId: string,
   workspaceType: WorkspaceType,
   workspaceId: string,
-  filters: { patientPhone?: string; chamberId?: string | null },
+  filters: { patientPhone?: string; scope?: RequestScope },
   page: number = 1,
   limit: number = 10,
 ) => {
@@ -578,10 +600,10 @@ const getMyPrescriptions = async (
   }
 
   // Filter criteria
-  // Always apply the chamber scope: a specific chamber, or the personal
-  // scope (chamberId IS NULL). Chamber A never returns Chamber B records.
-  if (filters.chamberId !== undefined) {
-    query.chamberId = filters.chamberId;
+  // Apply the request scope: the current chamber/personal context, or every
+  // authorized workspace when All Workspaces was explicitly selected.
+  if (filters.scope) {
+    Object.assign(query, scopeFilter(filters.scope));
   }
   if (filters.patientPhone) {
     query.patient = { phone: filters.patientPhone };
@@ -1171,9 +1193,17 @@ const verifyPrescriptionPublic = async (identifier: string) => {
  * as finalized prescriptions so the browser preview and the printed output
  * share one renderer (Section 14.4).
  */
-const previewPrescription = async (id: string, workspaceId: string) => {
+const previewPrescription = async (
+  id: string,
+  workspaceId: string,
+  scope?: RequestScope,
+) => {
   const prescription = await prisma.prescription.findFirst({
-    where: { id, workspaceId, isDeleted: false },
+    where: {
+        id,
+        ...(scope ? (scopeFilter(scope) as any) : { workspaceId }),
+        isDeleted: false,
+      },
     select: { id: true },
   });
 
@@ -1193,11 +1223,16 @@ const amendPrescription = async (
   prescriptionId: string,
   userId: string,
   workspaceId: string,
+  scope?: RequestScope,
 ) => {
   await checkUserVerification(userId);
 
   const original = await prisma.prescription.findFirst({
-    where: { id: prescriptionId, workspaceId, isDeleted: false },
+    where: {
+        id: prescriptionId,
+        ...(scope ? (scopeFilter(scope) as any) : { workspaceId }),
+        isDeleted: false,
+      },
     include: {
       prescriptionMedicines: true,
       clinicalObservations: true,

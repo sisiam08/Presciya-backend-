@@ -75,12 +75,34 @@ export const authorizedWorkspaceIds = async (
 };
 
 /** Resolve the request's data scope, validating the chamber when scoped. */
+/**
+ * The requested scope mode. Carried on the `x-workspace-scope` header (the same
+ * transport the chamber context uses, which is proven to reach the resolver)
+ * with a query-string fallback. Anything other than an explicit "all" means
+ * "current", so a missing/garbled value can never widen access.
+ */
+export const requestedScopeMode = (req: any): "current" | "all" => {
+  const header = req?.headers?.["x-workspace-scope"];
+  const value =
+    typeof header === "string" && header.trim()
+      ? header.trim()
+      : typeof req?.query?.workspaceScope === "string"
+        ? req.query.workspaceScope.trim()
+        : "";
+  return value.toLowerCase() === "all" ? "all" : "current";
+};
+
 export const resolveRequestScope = async (
   userId: string,
   workspaceId: string,
   req: any,
 ): Promise<RequestScope> => {
-  if (req?.query?.workspaceScope === "all") {
+  const requestedChamberId = chamberIdFromRequest(req);
+
+  // All Workspaces is only ever valid from the PERSONAL context. Operating in a
+  // chamber always scopes to that chamber, no matter what the client sends —
+  // this is enforced here, not in the UI.
+  if (requestedScopeMode(req) === "all" && !requestedChamberId) {
     return {
       mode: "all",
       workspaceId,
@@ -89,10 +111,7 @@ export const resolveRequestScope = async (
     };
   }
 
-  const chamberId = await resolveChamberScope(
-    workspaceId,
-    chamberIdFromRequest(req),
-  );
+  const chamberId = await resolveChamberScope(workspaceId, requestedChamberId);
   return { mode: "current", workspaceId, workspaceIds: [workspaceId], chamberId };
 };
 
@@ -106,6 +125,25 @@ export const scopeFilter = (
   scope.mode === "all"
     ? { workspaceId: { in: scope.workspaceIds } }
     : { workspaceId: scope.workspaceId, ...chamberScopeFilter(scope.chamberId) };
+
+/**
+ * Does an already-loaded record fall inside the request scope? Used by the
+ * lookup-then-mutate paths (payment, status changes) where the record is read
+ * first and then updated — the read MUST carry the scope or the update becomes
+ * an authorization bypass.
+ */
+export const recordInScope = (
+  record: { workspaceId?: string | null; chamberId?: string | null },
+  scope: RequestScope,
+): boolean => {
+  if (scope.mode === "all") {
+    return scope.workspaceIds.includes(record.workspaceId ?? "");
+  }
+  return (
+    record.workspaceId === scope.workspaceId &&
+    (record.chamberId ?? null) === scope.chamberId
+  );
+};
 
 export const chamberIdFromRequest = (req: any): string | null => {
   const header = req?.headers?.["x-chamber-id"];
