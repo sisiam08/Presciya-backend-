@@ -41,6 +41,28 @@ const StructuredMedicineSchema = z.object({
   customScheduleJson: z.record(z.string(), z.any()).optional(),
 });
 
+/** One requested test. Only the test name is required. */
+const InvestigationSchema = z.object({
+  testName: z.string().min(1, "Test name is required"),
+  note: z.string().optional(),
+});
+
+/**
+ * Optional clinical free-text: past history and the On Examination findings.
+ * Free text on purpose — doctors write varied shorthand ("Nil", "+", "Mild").
+ */
+const clinicalTextFields = {
+  history: z.string().optional(),
+  examRespiratoryRate: z.string().optional(),
+  examLungs: z.string().optional(),
+  examHeart: z.string().optional(),
+  examAnaemia: z.string().optional(),
+  examCyanosis: z.string().optional(),
+  examOedema: z.string().optional(),
+  examDehydration: z.string().optional(),
+  examOthers: z.string().optional(),
+};
+
 const createPrescriptionSchema = z.object({
   body: z.object({
     patientId: z.string().uuid("Invalid Patient ID"),
@@ -59,6 +81,9 @@ const createPrescriptionSchema = z.object({
     clinicalNotes: z.string().optional(),
     advises: z.string().optional(),
     nextVisitDate: z.string().optional(), // YYYY-MM-DD
+    ...clinicalTextFields,
+    // Ordered list of requested tests (optional, repeatable).
+    investigations: z.array(InvestigationSchema).optional(),
     medicines: z
       .array(StructuredMedicineSchema)
       .min(1, "At least one medicine is required"),
@@ -86,6 +111,9 @@ const updatePrescriptionSchema = z.object({
     clinicalNotes: z.string().optional(),
     advises: z.string().optional(),
     nextVisitDate: z.string().optional(),
+    ...clinicalTextFields,
+    // When provided, replaces the prescription's investigation list.
+    investigations: z.array(InvestigationSchema).optional(),
     medicines: z.array(StructuredMedicineSchema).optional(),
     status: z.enum(["DRAFT", "FINALIZED", "CANCELLED"]).optional(),
     language: z.nativeEnum(PrescriptionLanguage).optional(),

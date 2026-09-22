@@ -3,6 +3,7 @@ import { ChamberControllers } from "./chamber.controller";
 import { ChamberValidation } from "./chamber.validation";
 import validateRequest from "../../middleware/validateRequest";
 import { authOnly, authWorkspace } from "../../middleware/auth";
+import { requireFeatureAccess } from "../../middleware/featureAccess";
 import { WorkspaceRole } from "../../../generated/prisma/enums";
 
 const router = Router();
@@ -68,7 +69,9 @@ router.delete(
   ChamberControllers.deleteChamberSchedule,
 );
 
-// Create appointment (any workspace member)
+// Create appointment (any workspace member). Appointment booking is a premium,
+// admin-configurable feature, so the same entitlement gate as
+// POST /appointment applies here too (otherwise this route bypasses it).
 router.post(
   "/:id/appointments",
   authWorkspace([
@@ -77,6 +80,10 @@ router.post(
     WorkspaceRole.ASSISTANT,
     WorkspaceRole.MANAGER,
   ]) as any,
+  requireFeatureAccess("appointments", {
+    trackUsage: false,
+    incrementBy: 0,
+  }) as any,
   validateRequest(ChamberValidation.createAppointmentSchema),
   ChamberControllers.createAppointment,
 );

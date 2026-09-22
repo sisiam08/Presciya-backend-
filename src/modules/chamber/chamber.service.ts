@@ -10,6 +10,8 @@ import {
 import { AuditService } from "../audit/audit.service";
 import { checkUserVerification } from "../../utils/verificationCheck";
 import { SubscriptionServices } from "../subscription/subscription.service";
+import { FeatureServices } from "../feature/feature.service";
+import { normalizeBangladeshPhone } from "../../utils/phone";
 
 const createChamber = async (
   userId: string,
@@ -77,7 +79,8 @@ const createChamber = async (
     if (phones && phones.length > 0) {
       const contactNumbers = phones.map((phone, index) => ({
         chamberId: chamber.id,
-        phone,
+        // Canonical domestic form (+8801712345678 -> 01712345678).
+        phone: normalizeBangladeshPhone(phone),
         label: ContactLabel.RECEPTION,
         isPrimary: index === 0,
       }));
@@ -141,6 +144,18 @@ const updateChamber = async (
 
   const { phones, ...chamberData } = data;
 
+  // Chamber prescription customization (footer / watermark / logo settings) is
+  // a premium, admin-configurable feature — enforced here, not just in the UI.
+  if (chamberData.templateConfig !== undefined) {
+    await FeatureServices.checkFeatureAccess({
+      featureKey: "custom_branding",
+      userId,
+      workspaceId,
+      trackUsage: false,
+      incrementBy: 0,
+    });
+  }
+
   const chamber = await prisma.chamber.findFirst({
     where: { id, workspaceId, isActive: true },
   });
@@ -164,7 +179,7 @@ const updateChamber = async (
       if (phones.length > 0) {
         const contactNumbers = phones.map((phone: string, index: number) => ({
           chamberId: id,
-          phone,
+          phone: normalizeBangladeshPhone(phone),
           label: ContactLabel.RECEPTION,
           isPrimary: index === 0,
         }));

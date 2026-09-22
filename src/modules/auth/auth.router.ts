@@ -36,6 +36,13 @@ router.post(
 
 router.get("/me", authOnly(), AuthControllers.getCurrentUser);
 
+router.patch(
+  "/me",
+  authOnly(),
+  validateRequest(AuthValidation.UpdateMeSchema),
+  AuthControllers.updateMe,
+);
+
 router.post("/logout", authOnly(), AuthControllers.logOut);
 
 router.post("/logout-all", authOnly(), AuthControllers.logoutAll);

@@ -1,11 +1,12 @@
 import { z } from "zod";
+import { optionalBangladeshPhone } from "../../utils/phone";
 
 const createInstitutionSchema = z.object({
   body: z.object({
     name: z.string().min(3, "Institution name must be at least 3 characters"),
     legalName: z.string().min(3).optional(),
     address: z.string().min(5, "Address must be at least 5 characters"),
-    phone: z.string().optional(),
+    phone: optionalBangladeshPhone(),
     email: z.string().email("Invalid email").optional(),
     website: z.string().url("Invalid website URL").optional(),
     slogan: z.string().optional(),
@@ -21,7 +22,7 @@ const updateInstitutionSchema = z.object({
     name: z.string().min(3).optional(),
     legalName: z.string().min(3).optional(),
     address: z.string().min(5).optional(),
-    phone: z.string().optional(),
+    phone: optionalBangladeshPhone(),
     email: z.string().email().optional(),
     website: z.string().url().optional(),
     slogan: z.string().optional(),

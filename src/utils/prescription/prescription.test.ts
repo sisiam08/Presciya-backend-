@@ -98,13 +98,51 @@ describe("prescription rendering — language", () => {
     expect(html).toContain("Next Visit");
   });
 
-  it("Bangla translates meal timing and the four language-aware labels", () => {
+  it("Bangla localises predefined VALUES but keeps the field labels in English", () => {
     const html = generatePrescriptionHtml(banglaData());
+    // Predefined value localised (meal timing).
     expect(html).toContain("খাবার পরে"); // After Meal
-    expect(html).toContain("পরামর্শ"); // Advice
-    expect(html).toContain("পরবর্তী সাক্ষাৎ"); // Next Visit
-    expect(html).toContain("নির্দেশনা"); // Instructions
     expect(html).not.toContain("After Meal");
+    // Field labels stay English in both languages (product decision).
+    expect(html).toContain("Instructions");
+    expect(html).toContain("Advice");
+    expect(html).toContain("Next Visit");
+    // The Bangla label forms must NOT appear.
+    expect(html).not.toContain("নির্দেশনা");
+    expect(html).not.toContain("পরামর্শ");
+    expect(html).not.toContain("পরবর্তী সাক্ষাৎ");
+  });
+
+  it("does NOT translate doctor-entered free text (Instructions / Others)", () => {
+    const data = baseData({
+      language: "BANGLA",
+      clinicalNotes: "Drink plenty of water and take complete rest.",
+      examOthers: "Mild throat congestion",
+      medicines: [snapshotMedicine(1)],
+    });
+    const html = generatePrescriptionHtml(data);
+    // Doctor text is rendered exactly as entered, in both languages.
+    expect(html).toContain("Drink plenty of water and take complete rest.");
+    expect(html).toContain("Mild throat congestion");
+  });
+
+  it("localises predefined Special Instructions but leaves custom ones alone", () => {
+    const withPreset = generatePrescriptionHtml(
+      baseData({
+        language: "BANGLA",
+        medicines: [{ ...snapshotMedicine(1), notes: "Take with plenty of water" }],
+      }),
+    );
+    expect(withPreset).toContain("পর্যাপ্ত পানি দিয়ে সেবন করুন");
+    expect(withPreset).not.toContain("Take with plenty of water");
+
+    const withCustom = generatePrescriptionHtml(
+      baseData({
+        language: "BANGLA",
+        medicines: [{ ...snapshotMedicine(1), notes: "Take half a tablet at night" }],
+      }),
+    );
+    expect(withCustom).toContain("Take half a tablet at night");
   });
 
   it("Bangla does NOT translate proper nouns, medicine or dosage", () => {

@@ -10,6 +10,7 @@ import {
   getPrescriptionLabels,
   isBangla,
   localizeDurationText,
+  localizeSpecialInstruction,
   translateMealTiming,
   PrescriptionLabels,
 } from "./language";
@@ -29,6 +30,32 @@ export interface MedicineViewModel {
   notes: string;
 }
 
+export interface ExaminationViewModel {
+  label: string;
+  value: string;
+}
+
+export interface InvestigationViewModel {
+  testName: string;
+  note: string;
+}
+
+/**
+ * On Examination fields, in the order they appear on the form. Labels are
+ * medical shorthand and stay verbatim — like Complaints/Diagnosis they are not
+ * part of the four language-aware parts (Section 13.1).
+ */
+const EXAM_FIELDS: Array<{ key: keyof IPdfRenderData; label: string }> = [
+  { key: "examRespiratoryRate", label: "R/R" },
+  { key: "examLungs", label: "Lungs" },
+  { key: "examHeart", label: "Heart" },
+  { key: "examAnaemia", label: "Anaemia" },
+  { key: "examCyanosis", label: "Cyanosis" },
+  { key: "examOedema", label: "Oedema" },
+  { key: "examDehydration", label: "Dehydration" },
+  { key: "examOthers", label: "Others" },
+];
+
 export interface PrescriptionViewModel {
   language: PrescriptionLanguage;
   template: PrescriptionDesignTemplate;
@@ -46,6 +73,10 @@ export interface PrescriptionViewModel {
   disclaimer: string;
   colorTheme: string;
   showLogo: boolean;
+  /** Custom prescription footer (chamber or personal settings). */
+  footerText: string;
+  /** Resolved watermark for this prescription context. */
+  watermark: { enabled: boolean; text: string; url: string };
 
   doctor: {
     name: string;
@@ -77,14 +108,19 @@ export interface PrescriptionViewModel {
   diagnosis: string;
   clinicalNotes: string;
   advises: string;
-  vitals: {
-    bloodPressure: string;
-    pulse: string;
-    temperature: string;
-    height: string;
-  };
-  hasVitals: boolean;
   hasMedicalHistory: boolean;
+
+  /** Past medical history (separate from chief complaints). */
+  history: string;
+  /**
+   * On Examination rows — vital signs (BP/Pulse/Temperature/Weight/Height)
+   * followed by the examination findings. Only rows with a value are present.
+   */
+  examination: ExaminationViewModel[];
+  hasExamination: boolean;
+  /** Requested tests — only rows with a test name. */
+  investigations: InvestigationViewModel[];
+  hasInvestigations: boolean;
 
   medicines: MedicineViewModel[];
 }
@@ -244,16 +280,41 @@ export const buildPrescriptionViewModel = (
       duration: escapeHtml(formatDuration(med, language)),
       mealTimingLabel: escapeHtml(mealLabel),
       instruction: escapeHtml(med.instruction),
-      notes: escapeHtml(med.notes),
+      // Predefined special instructions are localised; doctor-typed custom text
+      // passes through unchanged.
+      notes: escapeHtml(localizeSpecialInstruction(med.notes, language)),
     };
   });
 
-  const vitals = {
-    bloodPressure: escapeHtml(bloodPressure),
-    pulse: escapeHtml(pulse),
-    temperature: escapeHtml(temperature),
-    height: escapeHtml(height),
-  };
+  // On Examination is ONE section: the vital signs come first (with their
+  // units), then the examination findings. Rows without a value are dropped, so
+  // a template renders the whole section off `hasExamination` and never prints
+  // an empty label or a separate "Vital Signs" section.
+  const rawData = data as unknown as Record<string, unknown>;
+  const examination: ExaminationViewModel[] = [
+    {
+      label: "BP",
+      value: bloodPressure ? `${escapeHtml(bloodPressure)} mmHg` : "",
+    },
+    { label: "Pulse", value: pulse ? `${escapeHtml(pulse)} /min` : "" },
+    {
+      label: "Temperature",
+      value: temperature ? `${escapeHtml(temperature)} °F` : "",
+    },
+    { label: "Weight", value: weight ? `${escapeHtml(weight)} kg` : "" },
+    { label: "Height", value: escapeHtml(height) },
+    ...EXAM_FIELDS.map(({ key, label }) => ({
+      label,
+      value: escapeHtml(asString(rawData[key as string])),
+    })),
+  ].filter((row) => row.value);
+
+  const investigations: InvestigationViewModel[] = (data.investigations || [])
+    .map((inv) => ({
+      testName: escapeHtml(inv?.testName),
+      note: escapeHtml(inv?.note),
+    }))
+    .filter((inv) => inv.testName);
 
   return {
     language,
@@ -272,6 +333,12 @@ export const buildPrescriptionViewModel = (
     disclaimer: escapeHtml(disclaimer),
     colorTheme,
     showLogo,
+    footerText: escapeHtml(data.footerText),
+    watermark: {
+      enabled: Boolean(data.watermark?.enabled),
+      text: escapeHtml(data.watermark?.text),
+      url: safeUrl(data.watermark?.url),
+    },
 
     doctor: {
       name: escapeHtml(formatDoctorName(doctor.name)),
@@ -303,11 +370,13 @@ export const buildPrescriptionViewModel = (
     diagnosis: escapeHtmlMultiline(diagnosis),
     clinicalNotes: escapeHtmlMultiline(clinicalNotes),
     advises: escapeHtmlMultiline(advises),
-    vitals,
-    hasVitals: Boolean(
-      vitals.bloodPressure || vitals.pulse || vitals.temperature || vitals.height,
-    ),
     hasMedicalHistory: Boolean(patient.allergies || patient.chronicDiseases),
+
+    history: escapeHtmlMultiline(data.history),
+    examination,
+    hasExamination: examination.length > 0,
+    investigations,
+    hasInvestigations: investigations.length > 0,
 
     medicines: medicineVms,
   };

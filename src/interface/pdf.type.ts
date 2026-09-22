@@ -16,6 +16,18 @@ export interface IPdfRenderData {
   clinicalNotes?: string | null;
   advises?: string | null;
   nextVisitDate?: Date | null;
+  // Optional clinical free text: past history + On Examination (O/E) findings.
+  history?: string | null;
+  examRespiratoryRate?: string | null;
+  examLungs?: string | null;
+  examHeart?: string | null;
+  examAnaemia?: string | null;
+  examCyanosis?: string | null;
+  examOedema?: string | null;
+  examDehydration?: string | null;
+  examOthers?: string | null;
+  // Ordered list of requested tests.
+  investigations?: Array<{ testName: string; note?: string | null }> | null;
   medicines: any[];
   doctor: {
     name: string;
@@ -48,6 +60,17 @@ export interface IPdfRenderData {
   };
   serialNumber?: string | null;
   verificationCode?: string | null;
+  /** Custom prescription footer (chamber footerText or personal settings). */
+  footerText?: string | null;
+  /**
+   * Resolved watermark for this prescription context (personal settings or
+   * chamber settings). Disabled/empty means nothing is drawn.
+   */
+  watermark?: {
+    enabled: boolean;
+    text?: string | null;
+    url?: string | null;
+  } | null;
 }
 
 export {};

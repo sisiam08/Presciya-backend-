@@ -49,12 +49,12 @@ const updateWorkspace = catchAsync(
     }
 
     const workspaceId = req.params.workspaceId as string;
-    const { name, image } = req.body;
+    const { name, image, slogan, templateConfig } = req.body;
 
     const workspace = await workspaceService.updateWorkspace(
       workspaceId,
       userId,
-      { name, logo: image },
+      { name, logo: image, slogan, templateConfig },
     );
 
     res.json({

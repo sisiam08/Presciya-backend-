@@ -3,7 +3,10 @@ import { InstitutionControllers } from "./institution.controller";
 import { InstitutionValidation } from "./institution.validation";
 import validateRequest from "../../middleware/validateRequest";
 import { authWorkspace } from "../../middleware/auth";
-import { requireInstitutionEnabled } from "../../middleware/featureAccess";
+import {
+  requireFeatureAccess,
+  requireInstitutionEnabled,
+} from "../../middleware/featureAccess";
 import { WorkspaceRole } from "../../../generated/prisma/enums";
 
 const router = Router();
@@ -50,6 +53,11 @@ router.patch(
 
 router.patch(
   "/branding",
+  // Custom branding is a premium, admin-configurable feature.
+  requireFeatureAccess("custom_branding", {
+    trackUsage: false,
+    incrementBy: 0,
+  }) as any,
   MANAGER,
   validateRequest(InstitutionValidation.updateBrandingSchema),
   InstitutionControllers.updateBranding,

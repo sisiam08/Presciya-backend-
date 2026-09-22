@@ -423,7 +423,7 @@ const getEntitlements = async (params: {
 
   const variantId = activePlan.variant.id;
 
-  const [features, planFeatures, usageRows] = await Promise.all([
+  const [features, planFeatures, usageRows, flags] = await Promise.all([
     prisma.feature.findMany({
       select: { id: true, key: true, description: true },
     }),
@@ -432,10 +432,19 @@ const getEntitlements = async (params: {
       select: { featureId: true, limitValue: true },
     }),
     prisma.usageTracking.findMany({ where: { workspaceId } }),
+    // Global kill switch. Enforcement (checkFeatureAccess) honours it, so the
+    // entitlements response must too — otherwise the UI would unlock a feature
+    // the API will reject.
+    prisma.featureFlag.findMany({
+      select: { featureId: true, isEnabledGlobally: true },
+    }),
   ]);
 
   const limitByFeature = new Map(
     planFeatures.map((pf) => [pf.featureId, pf.limitValue]),
+  );
+  const globallyEnabledByFeature = new Map(
+    flags.map((flag) => [flag.featureId, flag.isEnabledGlobally]),
   );
   // Resolve each row against the current period so a previous day's usage is
   // reported as 0 rather than reused.
@@ -449,7 +458,10 @@ const getEntitlements = async (params: {
   > = {};
 
   for (const f of features) {
-    const allowed = limitByFeature.has(f.id);
+    // Enabled when the plan includes it AND it is not globally switched off.
+    // A missing flag row means "enabled" (matches checkFeatureAccess).
+    const globallyEnabled = globallyEnabledByFeature.get(f.id) !== false;
+    const allowed = limitByFeature.has(f.id) && globallyEnabled;
     const limit = allowed ? limitByFeature.get(f.id) ?? null : null;
     const used = usedByKey.get(f.key) ?? 0;
     featuresResult[f.key] = {

@@ -377,6 +377,11 @@ model Workspace {
   phone   String?
   address String?
 
+  // Personal-prescription settings for PERSONAL workspaces (footer text,
+  // watermark). Mirrors Chamber.templateConfig so both contexts resolve the
+  // same way. Never holds chamber/institution identity.
+  templateConfig Json?
+
   ownerId String
   owner   User   @relation(fields: [ownerId], references: [id])
 
@@ -603,6 +608,18 @@ model Prescription {
   diagnosis     String?
   clinicalNotes String?
   advises       String?
+  // Relevant past medical history — deliberately separate from chief complaints.
+  history       String?
+  // On Examination (O/E) findings. Free text on purpose: doctors write varied
+  // shorthand ("Nil", "+", "Mild", "1+"), which a fixed enum would restrict.
+  examRespiratoryRate String?
+  examLungs           String?
+  examHeart           String?
+  examAnaemia         String?
+  examCyanosis        String?
+  examOedema          String?
+  examDehydration     String?
+  examOthers          String?
   nextVisitDate DateTime?
   pdfUrl        String?
   isDeleted     Boolean            @default(false)
@@ -615,6 +632,7 @@ model Prescription {
 
   clinicalObservations  ClinicalObservation[]
   prescriptionMedicines PrescriptionMedicine[]
+  investigations        PrescriptionInvestigation[]
   pdfVersions           PrescriptionPdfVersion[]
   printLogs             PrescriptionPrintLog[]
   financialTransactions FinancialTransaction[]
@@ -1118,6 +1136,24 @@ model PrescriptionMedicine {
   @@index([prescriptionId])
   @@index([medicineId])
   @@map("prescription_medicines")
+}
+
+/// Ordered list of investigations / tests requested on a prescription. Simpler
+/// than PrescriptionMedicine: just a test name plus an optional note.
+model PrescriptionInvestigation {
+  id             String  @id @default(uuid())
+  prescriptionId String
+  testName       String
+  note           String?
+  order          Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@index([prescriptionId])
+  @@map("prescription_investigations")
 }
 
 model PrescriptionPdfVersion {

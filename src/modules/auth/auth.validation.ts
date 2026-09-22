@@ -1,5 +1,6 @@
 import { z } from "zod";
 import config from "../../config";
+import { optionalBangladeshPhone } from "../../utils/phone";
 
 const SignUpSchema = z.object({
   body: z.object({
@@ -57,8 +58,20 @@ const SendOtpSchema = z.object({
   }),
 });
 
+/**
+ * Account Information (name / User.phone). Both optional — only the supplied
+ * fields are touched. Phone uses the shared Bangladesh rule.
+ */
+const UpdateMeSchema = z.object({
+  body: z.object({
+    name: z.string().min(3, "Name must be at least 3 characters long").optional(),
+    phone: optionalBangladeshPhone(),
+  }),
+});
+
 export const AuthValidation = {
   SignUpSchema,
+  UpdateMeSchema,
   logInSchema,
   RefreshTokenSchema,
   ForgotPasswordSchema,

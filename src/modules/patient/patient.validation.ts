@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { optionalBangladeshPhone } from "../../utils/phone";
 
 const createPatientSchema = z.object({
   body: z.object({
@@ -6,14 +7,14 @@ const createPatientSchema = z.object({
     age: z.number().int().min(0, "Age must be a positive integer"),
     gender: z.enum(["MALE", "FEMALE"]),
     weight: z.number().min(0).optional(),
-    phone: z.string().optional(),
+    phone: optionalBangladeshPhone(),
     address: z.string().optional(),
     bloodGroup: z
       .enum(["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"])
       .optional(),
     allergies: z.string().optional(),
     chronicDiseases: z.string().optional(),
-    emergencyContact: z.string().optional(),
+    emergencyContact: optionalBangladeshPhone(),
     patientNotes: z.string().optional(),
   }),
 });
@@ -24,14 +25,14 @@ const updatePatientSchema = z.object({
     age: z.number().int().min(0).optional(),
     gender: z.enum(["MALE", "FEMALE"]).optional(),
     weight: z.number().min(0).optional(),
-    phone: z.string().optional(),
+    phone: optionalBangladeshPhone(),
     address: z.string().optional(),
     bloodGroup: z
       .enum(["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"])
       .optional(),
     allergies: z.string().optional(),
     chronicDiseases: z.string().optional(),
-    emergencyContact: z.string().optional(),
+    emergencyContact: optionalBangladeshPhone(),
     patientNotes: z.string().optional(),
     isDeleted: z.boolean().optional(),
   }),

@@ -31,6 +31,39 @@ const BASE_STYLES = `
   .doc { flex: 1; display: flex; flex-direction: column; position: relative; z-index: 1; }
   /* Footer/signature always anchors to the bottom of the final page. */
   .page-footer { margin-top: auto; }
+  /* Keep every direct document block above the watermark layer. Must come
+     BEFORE .rx-watermark so the watermark keeps its absolute positioning. */
+  .doc > * { position: relative; z-index: 1; }
+  /* Prescription watermark: behind the content, clipped to the document so it
+     can never overflow A4 or cover medicines/patient/doctor/signature. */
+  .rx-watermark {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .rx-watermark img { max-width: 55%; max-height: 55%; opacity: 0.07; }
+  .rx-watermark span {
+    font-size: 60px;
+    font-weight: 800;
+    letter-spacing: 6px;
+    color: #111111;
+    opacity: 0.05;
+    transform: rotate(-24deg);
+    white-space: nowrap;
+  }
+  /* Custom prescription footer (chamber or personal settings). */
+  .rx-footer-text {
+    font-size: 11px;
+    color: #555555;
+    text-align: center;
+    margin-top: 8px;
+    white-space: pre-line;
+  }
   .medicine-item { page-break-inside: avoid; }
   .header, .patient-banner, .patient-card { page-break-inside: avoid; }
   @media print {
@@ -74,6 +107,79 @@ const medInstructionLine = (m: MedicineViewModel): string =>
 
 const medNotesLine = (m: MedicineViewModel): string =>
   m.notes ? `<div class="med-notes">* ${m.notes}</div>` : "";
+
+// ── Watermark + custom footer (shared by every template) ─────────────────────
+// The watermark is drawn behind the content and clipped to the document; the
+// custom footer is a plain line rendered just above the page footer. Both are
+// empty strings when not configured, so templates render nothing.
+
+const watermarkLayer = (vm: PrescriptionViewModel): string => {
+  if (!vm.watermark?.enabled) return "";
+  const inner = vm.watermark.url
+    ? `<img src="${vm.watermark.url}" alt="">`
+    : vm.watermark.text
+      ? `<span>${vm.watermark.text}</span>`
+      : "";
+  return inner ? `<div class="rx-watermark" aria-hidden="true">${inner}</div>` : "";
+};
+
+const customFooter = (vm: PrescriptionViewModel): string =>
+  vm.footerText ? `<div class="rx-footer-text">${vm.footerText}</div>` : "";
+
+// ── Optional clinical additions (history / On Examination / Investigation) ────
+// Each returns "" when it has no content at all, so no template ever prints an
+// empty heading or empty list. The title/body class names are passed in so every
+// template keeps its own styling; `tag` matches each template's markup (some
+// use <p>, some <div>).
+
+interface SectionClasses {
+  title: string;
+  body: string;
+  tag?: "div" | "p";
+}
+
+const historySection = (
+  vm: PrescriptionViewModel,
+  c: SectionClasses,
+): string => {
+  if (!vm.history) return "";
+  const tag = c.tag ?? "div";
+  // "Past History" so it never collides with the patient chronic/allergies
+  // block, which some templates already title "History".
+  return `<${tag} class="${c.title}">Past History</${tag}><${tag} class="${c.body}">${vm.history}</${tag}>`;
+};
+
+const examinationSection = (
+  vm: PrescriptionViewModel,
+  c: SectionClasses,
+): string => {
+  if (!vm.hasExamination) return "";
+  const tag = c.tag ?? "div";
+  const findings = vm.examination
+    .map((e) => `<strong>${e.label}:</strong> ${e.value}`)
+    .join(" &nbsp;&middot;&nbsp; ");
+  return `<${tag} class="${c.title}">On Examination</${tag}><${tag} class="${c.body}">${findings}</${tag}>`;
+};
+
+// Per-template section styling (kept next to the helpers so a template change
+// is a one-line edit here rather than in three call sites).
+const DEFAULT_SECTION: SectionClasses = { title: "section-title", body: "notes-content" };
+const MC_SECTION: SectionClasses = { title: "mc-sec-title", body: "mc-text", tag: "p" };
+const MP_SECTION: SectionClasses = { title: "mp-sec-title", body: "mp-text" };
+const MM_SECTION: SectionClasses = { title: "mm-sec-title", body: "mm-text", tag: "p" };
+const EC_SECTION: SectionClasses = { title: "ec-sec-title", body: "ec-text" };
+
+const investigationSection = (
+  vm: PrescriptionViewModel,
+  c: SectionClasses,
+): string => {
+  if (!vm.hasInvestigations) return "";
+  const tag = c.tag ?? "div";
+  const items = vm.investigations
+    .map((inv) => `&bull; ${inv.testName}${inv.note ? ` &mdash; ${inv.note}` : ""}`)
+    .join("<br/>");
+  return `<${tag} class="${c.title}">Investigation</${tag}><${tag} class="${c.body}">${items}</${tag}>`;
+};
 
 const signatureBlock = (vm: PrescriptionViewModel, extraClass = ""): string => `
   <div class="signature-block ${extraClass}">
@@ -200,6 +306,7 @@ const defaultTemplate = (vm: PrescriptionViewModel): TemplateParts => {
   const body = `
   <div class="watermark">Presciya</div>
   <div class="doc">
+    ${watermarkLayer(vm)}
     <div class="header">
       <div class="doctor-info">
         <h1 class="doctor-name">${vm.doctor.name}</h1>
@@ -230,16 +337,10 @@ const defaultTemplate = (vm: PrescriptionViewModel): TemplateParts => {
     <div class="content-body">
       <div class="left-column">
         ${vm.complaints ? `<div class="section-title">Complaints</div><div class="notes-content">${vm.complaints}</div>` : ""}
+        ${historySection(vm, DEFAULT_SECTION)}
         ${vm.diagnosis ? `<div class="section-title">Diagnosis</div><div class="notes-content">${vm.diagnosis}</div>` : ""}
-        ${
-          vm.hasVitals
-            ? `<div class="section-title">Vitals</div>
-               ${vm.vitals.bloodPressure ? `<div class="notes-content"><strong>B.P:</strong> ${vm.vitals.bloodPressure} mmHg</div>` : ""}
-               ${vm.vitals.pulse ? `<div class="notes-content"><strong>Pulse:</strong> ${vm.vitals.pulse} /min</div>` : ""}
-               ${vm.vitals.temperature ? `<div class="notes-content"><strong>Temp:</strong> ${vm.vitals.temperature} °F</div>` : ""}
-               ${vm.vitals.height ? `<div class="notes-content"><strong>Height:</strong> ${vm.vitals.height}</div>` : ""}`
-            : ""
-        }
+        ${investigationSection(vm, DEFAULT_SECTION)}
+        ${examinationSection(vm, DEFAULT_SECTION)}
         ${
           vm.hasMedicalHistory
             ? `<div class="section-title">Medical History</div>
@@ -259,6 +360,7 @@ const defaultTemplate = (vm: PrescriptionViewModel): TemplateParts => {
       </div>
     </div>
 
+    ${customFooter(vm)}
     <div class="page-footer">
       ${qrBlock(vm)}
       ${generatedMeta(vm)}
@@ -356,6 +458,7 @@ const modernClinicalTemplate = (vm: PrescriptionViewModel): TemplateParts => {
 
   const body = `
   <div class="doc">
+    ${watermarkLayer(vm)}
     <div class="mc-header">
       ${vm.chamber.logo ? `<img class="mc-logo" src="${vm.chamber.logo}" alt="Logo">` : ""}
       <div class="mc-identity">
@@ -385,18 +488,12 @@ const modernClinicalTemplate = (vm: PrescriptionViewModel): TemplateParts => {
     <div class="mc-clinical">
       <div>
         ${vm.complaints ? `<p class="mc-sec-title">Complaints</p><p class="mc-text">${vm.complaints}</p>` : ""}
+        ${historySection(vm, MC_SECTION)}
         ${vm.diagnosis ? `<p class="mc-sec-title">Diagnosis</p><p class="mc-text">${vm.diagnosis}</p>` : ""}
+        ${investigationSection(vm, MC_SECTION)}
       </div>
       <div>
-        ${
-          vm.hasVitals
-            ? `<p class="mc-sec-title">Vitals</p>
-               ${vm.vitals.bloodPressure ? `<p class="mc-vital"><strong>B.P:</strong> ${vm.vitals.bloodPressure} mmHg</p>` : ""}
-               ${vm.vitals.pulse ? `<p class="mc-vital"><strong>Pulse:</strong> ${vm.vitals.pulse} /min</p>` : ""}
-               ${vm.vitals.temperature ? `<p class="mc-vital"><strong>Temp:</strong> ${vm.vitals.temperature} °F</p>` : ""}
-               ${vm.vitals.height ? `<p class="mc-vital"><strong>Height:</strong> ${vm.vitals.height}</p>` : ""}`
-            : ""
-        }
+        ${examinationSection(vm, MC_SECTION)}
         ${
           vm.hasMedicalHistory
             ? `${vm.patient.chronicDiseases ? `<p class="mc-vital"><strong>Chronic:</strong> ${vm.patient.chronicDiseases}</p>` : ""}
@@ -418,6 +515,7 @@ const modernClinicalTemplate = (vm: PrescriptionViewModel): TemplateParts => {
       <div><p class="mc-sec-title">${vm.labels.nextVisit}</p><p class="mc-text" style="font-weight:600;color:${vm.colorTheme};">${vm.nextVisitStr}</p></div>
     </div>
 
+    ${customFooter(vm)}
     <div class="page-footer">
       ${qrBlock(vm)}
       ${generatedMeta(vm)}
@@ -495,6 +593,7 @@ const minimalProfessionalTemplate = (
 
   const body = `
   <div class="doc">
+    ${watermarkLayer(vm)}
     <div class="mp-head">
       <div>
         ${vm.chamber.logo ? `<img class="mp-logo" src="${vm.chamber.logo}" alt="Logo">` : ""}
@@ -523,20 +622,10 @@ const minimalProfessionalTemplate = (
     <hr class="mp-rule">
 
     ${vm.complaints ? `<div class="mp-notes"><div><p class="mp-sec-title">Complaints</p><p class="mp-text">${vm.complaints}</p></div></div>` : ""}
+    ${vm.history ? `<div class="mp-notes"><div>${historySection(vm, MP_SECTION)}</div></div>` : ""}
     ${vm.diagnosis ? `<div class="mp-notes"><div><p class="mp-sec-title">Diagnosis</p><p class="mp-text">${vm.diagnosis}</p></div></div>` : ""}
-    ${
-      vm.hasVitals
-        ? `<div class="mp-notes"><div><p class="mp-sec-title">Vitals</p>
-             <p class="mp-text">${[
-               vm.vitals.bloodPressure ? `B.P: ${vm.vitals.bloodPressure} mmHg` : "",
-               vm.vitals.pulse ? `Pulse: ${vm.vitals.pulse} /min` : "",
-               vm.vitals.temperature ? `Temp: ${vm.vitals.temperature} °F` : "",
-               vm.vitals.height ? `Height: ${vm.vitals.height}` : "",
-             ]
-               .filter(Boolean)
-               .join(" &nbsp;·&nbsp; ")}</p></div></div>`
-        : ""
-    }
+    ${vm.hasInvestigations ? `<div class="mp-notes"><div>${investigationSection(vm, MP_SECTION)}</div></div>` : ""}
+    ${vm.hasExamination ? `<div class="mp-notes"><div>${examinationSection(vm, MP_SECTION)}</div></div>` : ""}
 
     <div class="mp-rx">Rx</div>
     ${medicinesHtml}
@@ -547,6 +636,7 @@ const minimalProfessionalTemplate = (
       <div><p class="mp-sec-title">${vm.labels.nextVisit}</p><p class="mp-text" style="font-weight:600;">${vm.nextVisitStr}</p></div>
     </div>
 
+    ${customFooter(vm)}
     <div class="page-footer">
       ${qrBlock(vm)}
       ${generatedMeta(vm)}
@@ -634,6 +724,7 @@ const modernMedicalTemplate = (vm: PrescriptionViewModel): TemplateParts => {
 
   const body = `
   <div class="doc">
+    ${watermarkLayer(vm)}
     <div class="mm-band">
       <div class="mm-band-left">
         ${vm.chamber.logo ? `<img class="mm-logo" src="${vm.chamber.logo}" alt="Logo">` : ""}
@@ -664,18 +755,12 @@ const modernMedicalTemplate = (vm: PrescriptionViewModel): TemplateParts => {
     <div class="mm-grid">
       <div>
         ${vm.complaints ? `<p class="mm-sec-title">Complaints</p><p class="mm-text">${vm.complaints}</p>` : ""}
+        ${historySection(vm, MM_SECTION)}
         ${vm.diagnosis ? `<p class="mm-sec-title">Diagnosis</p><p class="mm-text">${vm.diagnosis}</p>` : ""}
+        ${investigationSection(vm, MM_SECTION)}
       </div>
       <div>
-        ${
-          vm.hasVitals
-            ? `<p class="mm-sec-title">Vitals</p>
-               ${vm.vitals.bloodPressure ? `<p class="mm-vital"><strong>B.P:</strong> ${vm.vitals.bloodPressure} mmHg</p>` : ""}
-               ${vm.vitals.pulse ? `<p class="mm-vital"><strong>Pulse:</strong> ${vm.vitals.pulse} /min</p>` : ""}
-               ${vm.vitals.temperature ? `<p class="mm-vital"><strong>Temp:</strong> ${vm.vitals.temperature} °F</p>` : ""}
-               ${vm.vitals.height ? `<p class="mm-vital"><strong>Height:</strong> ${vm.vitals.height}</p>` : ""}`
-            : ""
-        }
+        ${examinationSection(vm, MM_SECTION)}
         ${
           vm.hasMedicalHistory
             ? `${vm.patient.chronicDiseases ? `<p class="mm-vital"><strong>Chronic:</strong> ${vm.patient.chronicDiseases}</p>` : ""}
@@ -697,6 +782,7 @@ const modernMedicalTemplate = (vm: PrescriptionViewModel): TemplateParts => {
       <div><p class="mm-sec-title">${vm.labels.nextVisit}</p><p class="mm-text" style="font-weight:600;color:${vm.colorTheme};">${vm.nextVisitStr}</p></div>
     </div>
 
+    ${customFooter(vm)}
     <div class="page-footer">
       ${qrBlock(vm)}
       ${generatedMeta(vm)}
@@ -782,6 +868,7 @@ const elegantCompactTemplate = (vm: PrescriptionViewModel): TemplateParts => {
 
   const body = `
   <div class="doc">
+    ${watermarkLayer(vm)}
     <div class="ec-head">
       <div>
         <h1 class="ec-doctor">${vm.doctor.name}</h1>
@@ -809,16 +896,10 @@ const elegantCompactTemplate = (vm: PrescriptionViewModel): TemplateParts => {
     <div class="ec-body">
       <div class="ec-side">
         ${vm.complaints ? `<div class="ec-sec-title">Complaints</div><div class="ec-text">${vm.complaints}</div>` : ""}
+        ${historySection(vm, EC_SECTION)}
         ${vm.diagnosis ? `<div class="ec-sec-title">Diagnosis</div><div class="ec-text">${vm.diagnosis}</div>` : ""}
-        ${
-          vm.hasVitals
-            ? `<div class="ec-sec-title">Vitals</div>
-               ${vm.vitals.bloodPressure ? `<div class="ec-vital"><strong>B.P:</strong> ${vm.vitals.bloodPressure} mmHg</div>` : ""}
-               ${vm.vitals.pulse ? `<div class="ec-vital"><strong>Pulse:</strong> ${vm.vitals.pulse} /min</div>` : ""}
-               ${vm.vitals.temperature ? `<div class="ec-vital"><strong>Temp:</strong> ${vm.vitals.temperature} °F</div>` : ""}
-               ${vm.vitals.height ? `<div class="ec-vital"><strong>Height:</strong> ${vm.vitals.height}</div>` : ""}`
-            : ""
-        }
+        ${investigationSection(vm, EC_SECTION)}
+        ${examinationSection(vm, EC_SECTION)}
         ${
           vm.hasMedicalHistory
             ? `<div class="ec-sec-title">History</div>
@@ -838,6 +919,7 @@ const elegantCompactTemplate = (vm: PrescriptionViewModel): TemplateParts => {
       </div>
     </div>
 
+    ${customFooter(vm)}
     <div class="page-footer">
       ${qrBlock(vm)}
       ${generatedMeta(vm)}

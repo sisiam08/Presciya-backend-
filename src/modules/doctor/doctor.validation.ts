@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { bangladeshPhone } from "../../utils/phone";
 import {
   ContactLabel,
   PrescriptionLanguage,
@@ -28,9 +29,8 @@ const UpdateDoctorProfileSchema = z.object({
           userId: z.string().optional(),
           chamberId: z.string().optional(),
           label: z.nativeEnum(ContactLabel, "Contact label is required"),
-          phone: z
-            .string()
-            .regex(config.regex.bdPhoneRegex, "Invalid phone number"),
+          // Shared Bangladesh rule (accepts +880…/separators, normalises).
+          phone: bangladeshPhone("Invalid phone number"),
           isPrimary: z.boolean().optional(),
         }),
       )

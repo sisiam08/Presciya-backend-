@@ -19,7 +19,7 @@ const config = {
     bcryptSaltRound: Number(process.env.BCRYPT_SALT_ROUND) || 10,
   },
   regex: {
-    bdPhoneRegex: /^(?:\+?88)?01[3-9]\d{8}$/,
+    // Phone rules live in src/utils/phone.ts — the single source of truth.
     passwordRegex:
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
   },

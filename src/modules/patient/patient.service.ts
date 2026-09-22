@@ -7,6 +7,7 @@ import {
   AuditEntityType,
 } from "../../../generated/prisma/enums";
 import { checkUserVerification } from "../../utils/verificationCheck";
+import { normalizeBangladeshPhone } from "../../utils/phone";
 
 const createPatient = async (
   userId: string,
@@ -36,12 +37,24 @@ const createPatient = async (
     throw createAppError("Doctor profile not found", Status.NOT_FOUND);
   }
 
+  // Store the canonical domestic form (+8801712345678 -> 01712345678) so the
+  // same number never ends up with multiple representations.
+  const data = {
+    ...patientData,
+    ...(patientData.phone
+      ? { phone: normalizeBangladeshPhone(patientData.phone) }
+      : {}),
+    ...(patientData.emergencyContact
+      ? { emergencyContact: normalizeBangladeshPhone(patientData.emergencyContact) }
+      : {}),
+  };
+
   // Duplicate detection is workspace-scoped (Section 11): the same phone in a
   // different workspace must not block registration here.
-  if (patientData.phone) {
+  if (data.phone) {
     const existingPatient = await prisma.patient.findFirst({
       where: {
-        phone: patientData.phone,
+        phone: data.phone,
         workspaceId,
         isDeleted: false,
       },
@@ -49,7 +62,7 @@ const createPatient = async (
 
     if (existingPatient) {
       throw createAppError(
-        `Patient with this phone number (${patientData.phone}) already exists under your profile as "${existingPatient.name}".`,
+        `Patient with this phone number (${data.phone}) already exists under your profile as "${existingPatient.name}".`,
         Status.CONFLICT,
       );
     }
@@ -60,7 +73,7 @@ const createPatient = async (
       data: {
         doctorId: doctor.id,
         workspaceId,
-        ...patientData,
+        ...data,
       },
     });
 
@@ -131,10 +144,21 @@ const updatePatient = async (
     throw createAppError("Patient not found", Status.NOT_FOUND);
   }
 
+  // Normalise phone values to the canonical domestic form on update too.
+  const updateData = {
+    ...data,
+    ...(typeof data?.phone === "string" && data.phone
+      ? { phone: normalizeBangladeshPhone(data.phone) }
+      : {}),
+    ...(typeof data?.emergencyContact === "string" && data.emergencyContact
+      ? { emergencyContact: normalizeBangladeshPhone(data.emergencyContact) }
+      : {}),
+  };
+
   return await prisma.$transaction(async (tx) => {
     const updated = await tx.patient.update({
       where: { id },
-      data,
+      data: updateData,
     });
 
     await AuditService.logAudit({

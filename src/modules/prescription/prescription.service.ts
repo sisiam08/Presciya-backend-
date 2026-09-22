@@ -38,6 +38,18 @@ const createPrescription = async (
     clinicalNotes?: string;
     advises?: string;
     nextVisitDate?: string;
+    // Optional clinical free text: past history + On Examination findings.
+    history?: string;
+    examRespiratoryRate?: string;
+    examLungs?: string;
+    examHeart?: string;
+    examAnaemia?: string;
+    examCyanosis?: string;
+    examOedema?: string;
+    examDehydration?: string;
+    examOthers?: string;
+    // Ordered list of requested tests.
+    investigations?: Array<{ testName: string; note?: string }>;
     medicines: any[];
     status?: PrescriptionStatus;
     // Optional per-prescription overrides; default to the doctor's settings.
@@ -196,6 +208,8 @@ const createPrescription = async (
         diagnosis: prescriptionData.diagnosis || null,
         clinicalNotes: prescriptionData.clinicalNotes || null,
         advises: prescriptionData.advises || null,
+        // History + On Examination (O/E) — all optional free text.
+        ...mapClinicalText(prescriptionData),
         nextVisitDate: prescriptionData.nextVisitDate
           ? new Date(prescriptionData.nextVisitDate)
           : null,
@@ -240,6 +254,9 @@ const createPrescription = async (
     await tx.prescriptionMedicine.createMany({
       data: medicineRelations,
     });
+
+    // 3.5 Investigations (ordered). Optional — an empty list writes nothing.
+    await createInvestigations(tx, prescription.id, prescriptionData.investigations);
 
     // 4. Update Medicine Favorites frequency metrics
     for (const med of prescriptionData.medicines) {
@@ -304,6 +321,7 @@ const getPrescriptionById = async (id: string, workspaceId: string) => {
     include: {
       prescriptionMedicines: true,
       clinicalObservations: true,
+      investigations: { orderBy: { order: "asc" } },
       doctor: true,
       chamber: {
         include: { contactNumbers: true },
@@ -361,6 +379,8 @@ const updatePrescription = async (
     // lines live in PrescriptionMedicine and vitals live in ClinicalObservation.
     const {
       medicines,
+      // Relation, not a Prescription column — handled separately below.
+      investigations,
       status,
       bloodPressure,
       pulse,
@@ -444,6 +464,14 @@ const updatePrescription = async (
       await tx.prescriptionMedicine.createMany({
         data: medicineRelations,
       });
+    }
+
+    // 2b. Refresh the investigation list when the request includes one.
+    if (investigations) {
+      await tx.prescriptionInvestigation.deleteMany({
+        where: { prescriptionId: id },
+      });
+      await createInvestigations(tx, id, investigations);
     }
 
     // Log Audit Record
@@ -570,6 +598,7 @@ const getMyPrescriptions = async (
         // would appear empty and saving could wipe existing medicines.
         prescriptionMedicines: true,
         clinicalObservations: true,
+        investigations: { orderBy: { order: "asc" } },
       },
     }),
     prisma.prescription.count({ where: query }),
@@ -603,10 +632,14 @@ const compileHtmlPrescription = async (
     include: {
       prescriptionMedicines: true,
       clinicalObservations: true,
+      investigations: { orderBy: { order: "asc" } },
       doctor: true, // This is a User relation
       chamber: {
         include: { contactNumbers: true },
       },
+      // Personal prescriptions resolve their prescription settings (footer /
+      // watermark) from the workspace — there is no chamber in that context.
+      workspace: { select: { templateConfig: true } },
       patient: true,
     },
   });
@@ -637,6 +670,8 @@ const compileHtmlPrescription = async (
   const snapshot = (prescription.renderSnapshot ?? null) as {
     doctor?: IPdfRenderData["doctor"];
     chamber?: IPdfRenderData["chamber"];
+    footerText?: string;
+    watermark?: IPdfRenderData["watermark"];
   } | null;
 
   const liveDoctor: IPdfRenderData["doctor"] = {
@@ -661,6 +696,29 @@ const compileHtmlPrescription = async (
           prescription.chamber.contactNumbers?.map((cn) => cn.phone) || [],
       }
     : null;
+
+  // Resolve the prescription CONTEXT: a chamber prescription uses the chamber's
+  // settings; a personal prescription (no chamber) uses the workspace's personal
+  // prescription settings. The two never mix.
+  type PrescriptionSettings = {
+    footerText?: string;
+    watermarkEnabled?: boolean;
+    watermarkText?: string;
+    watermarkUrl?: string;
+  };
+  const activeSettings: PrescriptionSettings = (prescription.chamber
+    ? prescription.chamber.templateConfig
+    : prescription.workspace?.templateConfig ?? {}) as PrescriptionSettings;
+
+  const footerText = prescription.chamber
+    ? prescription.chamber.footerText || activeSettings.footerText || ""
+    : activeSettings.footerText || "";
+
+  const watermark = {
+    enabled: Boolean(activeSettings.watermarkEnabled),
+    text: activeSettings.watermarkText || "",
+    url: activeSettings.watermarkUrl || "",
+  };
 
   // Structure render data matching IPdfRenderData interface
   const renderData: IPdfRenderData = {
@@ -689,12 +747,29 @@ const compileHtmlPrescription = async (
     clinicalNotes: prescription.clinicalNotes,
     advises: prescription.advises,
     nextVisitDate: prescription.nextVisitDate,
+    // History + On Examination findings and the ordered investigation list.
+    history: prescription.history,
+    examRespiratoryRate: prescription.examRespiratoryRate,
+    examLungs: prescription.examLungs,
+    examHeart: prescription.examHeart,
+    examAnaemia: prescription.examAnaemia,
+    examCyanosis: prescription.examCyanosis,
+    examOedema: prescription.examOedema,
+    examDehydration: prescription.examDehydration,
+    examOthers: prescription.examOthers,
+    investigations: prescription.investigations.map((inv) => ({
+      testName: inv.testName,
+      note: inv.note,
+    })),
     // ROOT CAUSE FIX: the renderer expects brandName/generic/strength/type but
     // PrescriptionMedicine stores them as snapshot* columns. Normalise here so
     // medicine names always reach the template.
     medicines: prescription.prescriptionMedicines.map(toRenderMedicine),
     doctor: snapshot?.doctor ?? liveDoctor,
     chamber: snapshot?.chamber ?? liveChamber,
+    // Finalized prescriptions keep the footer/watermark they were issued with.
+    footerText: snapshot?.footerText ?? footerText,
+    watermark: snapshot?.watermark ?? watermark,
     patient: {
       name: prescription.patient.name,
       age: prescription.patient.age,
@@ -717,6 +792,57 @@ const generateSerial = (workspaceId: string, seq: number): string => {
 // Opaque, non-sequential public verification identifier (Section 15).
 const generateVerificationCode = (): string =>
   crypto.randomBytes(16).toString("base64url");
+
+/** Optional clinical free-text columns (Section 4.6): history + O/E findings. */
+const CLINICAL_TEXT_KEYS = [
+  "history",
+  "examRespiratoryRate",
+  "examLungs",
+  "examHeart",
+  "examAnaemia",
+  "examCyanosis",
+  "examOedema",
+  "examDehydration",
+  "examOthers",
+] as const;
+
+/**
+ * Maps the optional history / On Examination fields into a Prisma write payload.
+ * Only keys actually present in the request are included, so a PATCH never
+ * clears a field it did not receive.
+ */
+const mapClinicalText = (data: Record<string, any>) => {
+  const mapped: Record<string, string | null> = {};
+  for (const key of CLINICAL_TEXT_KEYS) {
+    if (data[key] !== undefined) mapped[key] = data[key]?.trim() || null;
+  }
+  return mapped;
+};
+
+/**
+ * Writes the ordered investigation list. Rows without a test name are dropped
+ * (the name is the only required field) and an empty list writes nothing.
+ */
+const createInvestigations = async (
+  tx: any,
+  prescriptionId: string,
+  investigations?: Array<{ testName?: string; note?: string | undefined }>,
+) => {
+  if (!investigations?.length) return;
+
+  const rows = investigations
+    .filter((inv) => inv?.testName?.trim())
+    .map((inv, index) => ({
+      prescriptionId,
+      testName: inv.testName!.trim(),
+      note: inv.note?.trim() || null,
+      order: index,
+    }));
+
+  if (rows.length > 0) {
+    await tx.prescriptionInvestigation.createMany({ data: rows });
+  }
+};
 
 /**
  * Maps an incoming medicine payload to a PrescriptionMedicine row. Shared by
@@ -834,7 +960,7 @@ const finalizePrescription = async (
 
   // Freeze the branding used on this document so later profile/chamber edits
   // never rewrite an issued prescription (historical accuracy).
-  const [creator, doctorProfile, chamber] = await Promise.all([
+  const [creator, doctorProfile, chamber, workspace] = await Promise.all([
     prisma.user.findUnique({
       where: { id: existing.doctorUserId },
       select: { name: true },
@@ -847,7 +973,26 @@ const finalizePrescription = async (
           include: { contactNumbers: true },
         })
       : Promise.resolve(null),
+    // Personal prescription settings (footer / watermark) live on the workspace.
+    prisma.workspace.findUnique({
+      where: { id: existing.workspaceId },
+      select: { templateConfig: true },
+    }),
   ]);
+
+  // Freeze the resolved footer + watermark too, so a later change to the
+  // personal/chamber prescription settings cannot rewrite an issued document.
+  const frozenSettings = ((chamber?.templateConfig ??
+    workspace?.templateConfig ??
+    {}) as Record<string, unknown>) as {
+    footerText?: string;
+    watermarkEnabled?: boolean;
+    watermarkText?: string;
+    watermarkUrl?: string;
+  };
+  const frozenFooterText = chamber
+    ? chamber.footerText || frozenSettings.footerText || ""
+    : frozenSettings.footerText || "";
 
   const renderSnapshot = {
     doctor: {
@@ -871,6 +1016,12 @@ const finalizePrescription = async (
             chamber.contactNumbers?.map((cn) => cn.phone) || [],
         }
       : null,
+    footerText: frozenFooterText,
+    watermark: {
+      enabled: Boolean(frozenSettings.watermarkEnabled),
+      text: frozenSettings.watermarkText || "",
+      url: frozenSettings.watermarkUrl || "",
+    },
   };
 
   // Assign serial number (unique). Retry on the rare concurrent-collision case.
@@ -1048,6 +1199,7 @@ const amendPrescription = async (
     include: {
       prescriptionMedicines: true,
       clinicalObservations: true,
+      investigations: { orderBy: { order: "asc" } },
     },
   });
 
@@ -1077,6 +1229,16 @@ const amendPrescription = async (
         diagnosis: original.diagnosis,
         clinicalNotes: original.clinicalNotes,
         advises: original.advises,
+        // History + On Examination carry over to the corrected revision.
+        history: original.history,
+        examRespiratoryRate: original.examRespiratoryRate,
+        examLungs: original.examLungs,
+        examHeart: original.examHeart,
+        examAnaemia: original.examAnaemia,
+        examCyanosis: original.examCyanosis,
+        examOedema: original.examOedema,
+        examDehydration: original.examDehydration,
+        examOthers: original.examOthers,
         nextVisitDate: original.nextVisitDate,
         version: original.version + 1,
         supersedesId: original.id,
@@ -1134,6 +1296,16 @@ const amendPrescription = async (
       });
     }
 
+    // Carry the investigation list over to the corrected revision.
+    await createInvestigations(
+      tx,
+      created.id,
+      original.investigations.map((inv) => ({
+        testName: inv.testName,
+        note: inv.note ?? undefined,
+      })),
+    );
+
     return created;
   });
 
@@ -1161,6 +1333,7 @@ const amendPrescription = async (
     include: {
       prescriptionMedicines: true,
       clinicalObservations: true,
+      investigations: { orderBy: { order: "asc" } },
     },
   });
 

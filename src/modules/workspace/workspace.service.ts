@@ -15,6 +15,7 @@ import {
   IWorkspaceDetailDTO,
 } from "../../interface/workspace.type";
 import { checkUserVerification } from "../../utils/verificationCheck";
+import { FeatureServices } from "../feature/feature.service";
 
 // Generate URL-friendly slug
 const generateSlug = (name: string): string => {
@@ -208,7 +209,13 @@ const createWorkspace = async (
 const updateWorkspace = async (
   workspaceId: string,
   userId: string,
-  data: { name?: string; logo?: string },
+  data: {
+    name?: string;
+    logo?: string;
+    slogan?: string | null;
+    /** Personal-prescription settings: { footerText, watermarkEnabled, ... }. */
+    templateConfig?: Record<string, unknown> | null;
+  },
 ): Promise<IWorkspaceResponseDTO> => {
   const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
@@ -243,6 +250,20 @@ const updateWorkspace = async (
     updateData.slug = slug;
   }
   if (data.logo !== undefined) updateData.logo = data.logo;
+  if (data.slogan !== undefined) updateData.slogan = data.slogan;
+
+  // Personal-prescription settings (custom footer / watermark) are a premium,
+  // admin-configurable feature — enforced here, not just in the UI.
+  if (data.templateConfig !== undefined) {
+    await FeatureServices.checkFeatureAccess({
+      featureKey: "custom_branding",
+      userId,
+      workspaceId,
+      trackUsage: false,
+      incrementBy: 0,
+    });
+    updateData.templateConfig = data.templateConfig;
+  }
 
   const updated = (await prisma.workspace.update({
     where: { id: workspaceId },

@@ -5,6 +5,7 @@ import { ILogInUserType, ISignUpUserType } from "../../interface";
 import jwt from "jsonwebtoken";
 import { createAppError } from "../../errors/appError";
 import { Status } from "../../errors/httpStatus";
+import { normalizeBangladeshPhone } from "../../utils/phone";
 import {
   WorkspaceType,
   WorkspaceRole,
@@ -1111,12 +1112,36 @@ const getCurrentUser = async (userId: string) => {
   };
 };
 
+/**
+ * Updates the caller's own account information (name / User.phone). Only the
+ * provided fields change. An empty phone clears it; otherwise the canonical
+ * Bangladesh form is stored.
+ */
+const updateMe = async (
+  userId: string,
+  data: { name?: string; phone?: string },
+) => {
+  const updateData: { name?: string; phone?: string | null } = {};
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.phone !== undefined) {
+    updateData.phone =
+      data.phone === "" ? null : normalizeBangladeshPhone(data.phone);
+  }
+
+  if (Object.keys(updateData).length > 0) {
+    await prisma.user.update({ where: { id: userId }, data: updateData });
+  }
+
+  return getCurrentUser(userId);
+};
+
 export const AuthServices = {
   sendOTP,
   signUp,
   logIn,
   switchWorkspace,
   getCurrentUser,
+  updateMe,
   refreshToken,
   logOut,
   logoutAll,

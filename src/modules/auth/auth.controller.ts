@@ -202,6 +202,23 @@ const getCurrentUser = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const updateMe = catchAsync(async (req: Request, res: Response) => {
+  const userId = req.user?.id;
+
+  if (!userId) {
+    throw createAppError("Unauthorized", Status.UNAUTHORIZED);
+  }
+
+  const result = await AuthServices.updateMe(userId, req.body);
+
+  sendResponse(res, {
+    statusCode: Status.OK,
+    success: true,
+    message: "Account updated successfully",
+    data: result,
+  });
+});
+
 const forgetPassword = catchAsync(async (req: Request, res: Response) => {
   const { email } = req.body;
   const result = await AuthServices.forgetPassword(email);
@@ -232,6 +249,7 @@ export const AuthControllers = {
   logIn,
   switchWorkspace,
   getCurrentUser,
+  updateMe,
   refreshToken,
   logOut,
   logoutAll,

@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma";
+import { normalizeBangladeshPhone } from "../../utils/phone";
 import { createAppError } from "../../errors/appError";
 import { Status } from "../../errors/httpStatus";
 import {
@@ -59,7 +60,12 @@ const splitProfileData = (data: InstitutionProfileInput) => {
     institutionData.description = data.description;
 
   if (data.address !== undefined) workspaceData.address = data.address;
-  if (data.phone !== undefined) workspaceData.phone = data.phone;
+    if (data.phone !== undefined) {
+      // Canonical domestic form (+8801712345678 -> 01712345678).
+      workspaceData.phone = data.phone
+        ? normalizeBangladeshPhone(data.phone)
+        : data.phone;
+    }
   if (data.email !== undefined) workspaceData.email = data.email;
   if (data.slogan !== undefined) workspaceData.slogan = data.slogan;
   if (data.logo !== undefined) workspaceData.logo = data.logo;

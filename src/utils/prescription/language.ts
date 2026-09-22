@@ -3,13 +3,18 @@ import { PrescriptionLanguage } from "../../../generated/prisma/enums";
 // Centralised prescription-language dictionary. This is the ONLY place the
 // translatable strings live — templates never hardcode translation logic.
 //
-// Only four parts of a prescription are language-aware:
-//   1. Doctor's instructions (section label)
-//   2. Advice (section label)
-//   3. Next Visit (section label + the "as needed" default)
-//   4. Medicine meal-timing labels
+// Product decision: only system-generated VALUES are localised. Field LABELS
+// stay English in both languages, and text the doctor types is never translated
+// (it is rendered exactly as entered).
+//
+// Localised values:
+//   1. "As needed" — the default when no next-visit date is set
+//   2. Medicine meal-timing labels
+//   3. Duration values (formatDurationValue / localizeDurationText)
+//   4. The next-visit date (formatPrescriptionDate)
+//   5. Predefined Special Instruction options (localizeSpecialInstruction)
 // Everything else (names, medicine/generic, strength, dosage numbers, dates,
-// IDs, addresses) stays exactly as entered.
+// IDs, addresses, doctor-typed text) stays exactly as entered.
 
 export interface PrescriptionLabels {
   instructions: string;
@@ -19,10 +24,16 @@ export interface PrescriptionLabels {
   mealTiming: Record<string, string>;
 }
 
-const ENGLISH: PrescriptionLabels = {
+// Section labels are intentionally NOT translated — they read the same in both
+// languages so a bilingual prescription keeps familiar headings.
+const FIXED_LABELS = {
   instructions: "Instructions",
   advice: "Advice",
   nextVisit: "Next Visit",
+};
+
+const ENGLISH: PrescriptionLabels = {
+  ...FIXED_LABELS,
   asNeeded: "As needed",
   mealTiming: {
     BEFORE_MEAL: "Before Meal",
@@ -35,9 +46,7 @@ const ENGLISH: PrescriptionLabels = {
 };
 
 const BANGLA: PrescriptionLabels = {
-  instructions: "নির্দেশনা",
-  advice: "পরামর্শ",
-  nextVisit: "পরবর্তী সাক্ষাৎ",
+  ...FIXED_LABELS,
   asNeeded: "প্রয়োজন অনুযায়ী",
   mealTiming: {
     BEFORE_MEAL: "খাবার আগে",
@@ -146,4 +155,55 @@ export const localizeDurationText = (
     const bn = BN_DURATION_UNITS[singularUnit(unit)];
     return bn ? `${toBanglaDigits(num)} ${bn}` : full;
   });
+};
+
+// ─── Predefined "Special Instruction" options ────────────────────────────────
+// The medicine card offers these as a picker (plus a free-text "Custom…"
+// option). They are system-provided values, so they ARE localised. A custom
+// entry is doctor text and is rendered exactly as typed.
+//
+// NOTE: this list is mirrored on the frontend (SPECIAL_INSTRUCTION_OPTIONS in
+// PrescriptionBuilder.tsx) — keep both in sync.
+
+export const SPECIAL_INSTRUCTION_OPTIONS = [
+  "Take with plenty of water",
+  "Take on an empty stomach",
+  "Take with food",
+  "Do not take with milk",
+  "Complete the full course",
+  "Do not crush or chew",
+  "Take at bedtime",
+  "Avoid alcohol",
+  "Shake well before use",
+  "Apply thinly to the affected area",
+  "For external use only",
+  "Keep out of reach of children",
+] as const;
+
+const BN_SPECIAL_INSTRUCTIONS: Record<string, string> = {
+  "Take with plenty of water": "পর্যাপ্ত পানি দিয়ে সেবন করুন",
+  "Take on an empty stomach": "খালি পেটে সেবন করুন",
+  "Take with food": "খাবারের সাথে সেবন করুন",
+  "Do not take with milk": "দুধের সাথে সেবন করবেন না",
+  "Complete the full course": "সম্পূর্ণ কোর্স শেষ করুন",
+  "Do not crush or chew": "চূর্ণ বা চিবাবেন না",
+  "Take at bedtime": "ঘুমানোর আগে সেবন করুন",
+  "Avoid alcohol": "মদ্যপান এড়িয়ে চলুন",
+  "Shake well before use": "ব্যবহারের আগে ভালোভাবে ঝাঁকিয়ে নিন",
+  "Apply thinly to the affected area": "আক্রান্ত স্থানে পাতলা করে লাগান",
+  "For external use only": "শুধুমাত্র বাহ্যিক ব্যবহারের জন্য",
+  "Keep out of reach of children": "শিশুদের নাগালের বাইরে রাখুন",
+};
+
+/**
+ * Localises a predefined Special Instruction. Text the doctor typed themselves
+ * (anything not in the predefined list) is returned unchanged.
+ */
+export const localizeSpecialInstruction = (
+  text?: string | null,
+  language?: string | null,
+): string => {
+  if (!text) return "";
+  if (!isBangla(language)) return text;
+  return BN_SPECIAL_INSTRUCTIONS[text.trim()] ?? text;
 };
