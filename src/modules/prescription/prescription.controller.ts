@@ -5,6 +5,10 @@ import sendResponse from "../../utils/sendResponse";
 import { Status } from "../../errors/httpStatus";
 import { requireStringParam } from "../../utils/requestParams";
 import {
+  chamberIdFromRequest,
+  resolveChamberScope,
+} from "../../utils/chamberScope";
+import {
   WorkspaceRole,
   WorkspaceType,
   PrescriptionLanguage,
@@ -79,7 +83,14 @@ const getMyPrescriptions = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.id as string;
   const workspaceType = req.user?.workspaceType as WorkspaceType;
   const workspaceId = (req as any).workspaceId as string;
-  const { patientPhone, chamberId, page = 1, limit = 10 } = req.query;
+  const { patientPhone, page = 1, limit = 10 } = req.query;
+
+  // Chamber isolation: the current chamber (or the personal scope) is resolved
+  // and validated against the caller's workspace before the query runs.
+  const chamberId = await resolveChamberScope(
+    workspaceId,
+    chamberIdFromRequest(req),
+  );
 
   const result = await PrescriptionServices.getMyPrescriptions(
     userId,
@@ -87,7 +98,7 @@ const getMyPrescriptions = catchAsync(async (req: Request, res: Response) => {
     workspaceId,
     {
       patientPhone: patientPhone as string,
-      chamberId: chamberId as string,
+      chamberId,
     },
     Number(page),
     Number(limit),

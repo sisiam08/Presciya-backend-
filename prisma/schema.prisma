@@ -503,7 +503,9 @@ model Chamber {
   schedules         ChamberSchedule[]
   appointments      Appointment[]
 
+  patients      Patient[]
   prescriptions Prescription[]
+  visitingFees  DoctorVisitingFee[]
 
   createdAt DateTime @default(now())
 
@@ -533,7 +535,11 @@ model Medicine {
 
 model Patient {
   id          String  @id @default(uuid())
-  workspaceId String? // NEW: Workspace this patient belongs to
+  workspaceId String? // Workspace this patient belongs to
+  // Canonical CHAMBER ownership. A patient created while working in Chamber A
+  // belongs to Chamber A; chambers are isolated from each other by default.
+  // NULL means a personal-workspace patient.
+  chamberId   String?
   doctorId    String  @default("00000000-0000-0000-0000-000000000000")
   name        String
   age         Int
@@ -555,6 +561,7 @@ model Patient {
   updatedAt DateTime @updatedAt
 
   workspace     Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  chamber       Chamber?       @relation(fields: [chamberId], references: [id], onDelete: Cascade)
   doctor        Doctor         @relation(fields: [doctorId], references: [id], onDelete: SetDefault)
   prescriptions Prescription[]
   financialTransactions FinancialTransaction[]
@@ -727,8 +734,12 @@ model DoctorVisitingFee {
 
   doctorId    String
   workspaceId String
-  doctor      Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  // The fee belongs to a specific CHAMBER. Chambers live inside a workspace, so
+  // keying only on the workspace made every chamber share one fee.
+  chamberId String?
+  doctor    Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  chamber   Chamber?  @relation(fields: [chamberId], references: [id], onDelete: Cascade)
 
   visitingFee Decimal  @db.Decimal(12, 2)
   // Optional separate follow-up fee; falls back to visitingFee when null.
@@ -739,8 +750,10 @@ model DoctorVisitingFee {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([doctorId, workspaceId])
+  // One fee per doctor PER CHAMBER — changing Chamber A never touches B or C.
+  @@unique([doctorId, chamberId])
   @@index([workspaceId])
+  @@index([chamberId])
   @@map("doctor_visiting_fees")
 }
 

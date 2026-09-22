@@ -114,6 +114,20 @@ const getDoctorProfile = async (userId: string) => {
     where: {
       userId,
     },
+    // The account's authoritative contact details live on the user record.
+    // Branding / prescription templates read them from here rather than
+    // duplicating phone and email on the doctor profile.
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          avatar: true,
+        },
+      },
+    },
   });
 };
 

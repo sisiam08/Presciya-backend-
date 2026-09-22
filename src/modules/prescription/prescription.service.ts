@@ -553,7 +553,7 @@ const getMyPrescriptions = async (
   userId: string,
   workspaceType: WorkspaceType,
   workspaceId: string,
-  filters: { patientPhone?: string; chamberId?: string },
+  filters: { patientPhone?: string; chamberId?: string | null },
   page: number = 1,
   limit: number = 10,
 ) => {
@@ -578,7 +578,9 @@ const getMyPrescriptions = async (
   }
 
   // Filter criteria
-  if (filters.chamberId) {
+  // Always apply the chamber scope: a specific chamber, or the personal
+  // scope (chamberId IS NULL). Chamber A never returns Chamber B records.
+  if (filters.chamberId !== undefined) {
     query.chamberId = filters.chamberId;
   }
   if (filters.patientPhone) {

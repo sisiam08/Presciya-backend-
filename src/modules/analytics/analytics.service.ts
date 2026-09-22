@@ -3,7 +3,19 @@ import { createAppError } from "../../errors/appError";
 import { Status } from "../../errors/httpStatus";
 import { WorkspaceType } from "../../../generated/prisma/enums";
 
-const getDoctorAnalytics = async (userId: string) => {
+/**
+ * Practice analytics for a doctor.
+ *
+ * By default everything is scoped to the CURRENT workspace, so switching
+ * workspace switches the numbers. `scope: "all"` is an explicit opt-in that
+ * aggregates across every workspace the doctor is a member of — it still never
+ * includes another user's data.
+ */
+const getDoctorAnalytics = async (
+  userId: string,
+  workspaceId: string,
+  scope: "workspace" | "all" = "workspace",
+) => {
   const doctor = await prisma.doctor.findUnique({
     where: { userId },
   });
@@ -12,20 +24,27 @@ const getDoctorAnalytics = async (userId: string) => {
     throw createAppError("Doctor profile not found", Status.NOT_FOUND);
   }
 
+  const allWorkspaces = scope === "all";
+  /** Applied to every query so the default is strictly the active workspace. */
+  const workspaceFilter = allWorkspaces ? {} : { workspaceId };
+
   // 1. Total Patients Count
   const totalPatients = await prisma.patient.count({
-    where: { doctorId: doctor.id, isDeleted: false },
+    where: { doctorId: doctor.id, isDeleted: false, ...workspaceFilter },
   });
 
   // 2. Prescriptions Count (Total)
   const totalPrescriptions = await prisma.prescription.count({
-    where: { doctorUserId: doctor.userId, isDeleted: false },
+    where: { doctorUserId: doctor.userId, isDeleted: false, ...workspaceFilter },
   });
 
-  // 3. Chambers Count
-  const totalChambers = await prisma.chamber.count({
-    where: { workspace: { ownerId: doctor.userId }, isActive: true },
-  });
+  // 3. Chambers Count — chambers inside the active workspace, or every chamber
+  //    the doctor owns when explicitly viewing all workspaces.
+  const totalChambers = allWorkspaces
+    ? await prisma.chamber.count({
+        where: { workspace: { ownerId: doctor.userId }, isActive: true },
+      })
+    : await prisma.chamber.count({ where: { workspaceId, isActive: true } });
 
   // 4. Prescriptions Per Day (Last 7 Days Trend)
   const sevenDaysAgo = new Date();
@@ -35,6 +54,7 @@ const getDoctorAnalytics = async (userId: string) => {
     where: {
       doctorUserId: doctor.userId,
       isDeleted: false,
+      ...workspaceFilter,
       createdAt: { gte: sevenDaysAgo },
     },
     select: {
@@ -72,6 +92,7 @@ const getDoctorAnalytics = async (userId: string) => {
     where: {
       doctorUserId: doctor.userId,
       isDeleted: false,
+      ...workspaceFilter,
       createdAt: { gte: fifteenDaysAgo },
     },
     select: {
@@ -103,10 +124,10 @@ const getDoctorAnalytics = async (userId: string) => {
 
   // 6. Demographics (Male / Female counts)
   const malePatients = await prisma.patient.count({
-    where: { doctorId: doctor.id, gender: "MALE", isDeleted: false },
+    where: { doctorId: doctor.id, gender: "MALE", isDeleted: false, ...workspaceFilter },
   });
   const femalePatients = await prisma.patient.count({
-    where: { doctorId: doctor.id, gender: "FEMALE", isDeleted: false },
+    where: { doctorId: doctor.id, gender: "FEMALE", isDeleted: false, ...workspaceFilter },
   });
 
   // 7. Top 5 Most Prescribed Medicines
@@ -116,6 +137,7 @@ const getDoctorAnalytics = async (userId: string) => {
       prescription: {
         doctorUserId: doctor.userId,
         isDeleted: false,
+        ...workspaceFilter,
       },
     },
     _count: {

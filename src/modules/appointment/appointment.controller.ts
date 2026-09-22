@@ -3,6 +3,10 @@ import catchAsync from "../../utils/catchAsync";
 import sendResponse from "../../utils/sendResponse";
 import { Status } from "../../errors/httpStatus";
 import { requireStringParam } from "../../utils/requestParams";
+import {
+  chamberIdFromRequest,
+  resolveChamberScope,
+} from "../../utils/chamberScope";
 import { AppointmentService } from "./appointment.service";
 
 const meta = (req: Request) => ({
@@ -100,7 +104,13 @@ const updateStatus = catchAsync(async (req: Request, res: Response) => {
 const list = catchAsync(async (req: Request, res: Response) => {
   const workspaceId = (req as any).workspaceId as string;
   const { doctorId, patientId, from, to, date, page, limit } = req.query as any;
-  const filters: any = { doctorId, patientId, date };
+  // Chamber isolation: resolved from the current context and validated against
+  // the caller's workspace before the query runs.
+  const chamberId = await resolveChamberScope(
+    workspaceId,
+    chamberIdFromRequest(req),
+  );
+  const filters: any = { doctorId, patientId, date, chamberId };
   if (from) filters.from = new Date(from);
   if (to) filters.to = new Date(to);
   const data = await AppointmentService.listAppointments(

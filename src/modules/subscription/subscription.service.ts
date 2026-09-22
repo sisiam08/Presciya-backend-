@@ -324,10 +324,24 @@ const assertChamberLimit = async (userId: string, workspaceId: string) => {
 // ─── Services ────────────────────────────────────────────────────────────────
 
 /** Returns all available subscription plans that are currently active. */
+/**
+ * Available plans WITH their entitlements, so the UI can describe exactly what
+ * each plan unlocks instead of a vague summary. The plan feature rows are the
+ * same source of truth the backend gates on.
+ */
 const getAvailablePlans = async () => {
   return await prisma.subscriptionVariant.findMany({
     where: { isActive: true },
     orderBy: { price: "asc" },
+    include: {
+      planFeatures: {
+        include: {
+          feature: {
+            select: { key: true, description: true, category: true },
+          },
+        },
+      },
+    },
   });
 };
 

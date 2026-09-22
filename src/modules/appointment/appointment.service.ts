@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma";
+import { chamberScopeFilter } from "../../utils/chamberScope";
 import { createAppError } from "../../errors/appError";
 import { Status } from "../../errors/httpStatus";
 import {
@@ -129,11 +130,13 @@ const assertPatient = async (patientId: string, workspaceId: string) => {
 
 const buildFeeSnapshot = async (
   doctorId: string,
-  workspaceId: string,
+  chamberId: string | null | undefined,
   appointmentType: AppointmentType,
   discountInput: number,
 ) => {
-  const config = await FeeServices.getFeeConfig(doctorId, workspaceId);
+  // The fee belongs to the CHAMBER the appointment is booked in — never a
+  // global doctor fee. A personal (chamber-less) appointment has no fee.
+  const config = await FeeServices.getFeeConfig(doctorId, chamberId);
 
   // Follow-up uses the follow-up fee when configured, else the normal fee.
   const base =
@@ -352,7 +355,7 @@ const createAppointment = async (
 
   const snapshot = await buildFeeSnapshot(
     doctorId,
-    workspaceId,
+    data.chamberId,
     appointmentType,
     discountInput,
   );
@@ -659,6 +662,7 @@ const listAppointments = async (
     from?: Date;
     to?: Date;
     date?: string;
+    chamberId?: string | null;
   },
   page: unknown = 1,
   limit: unknown = 20,
@@ -669,6 +673,10 @@ const listAppointments = async (
   );
 
   const where: any = { workspaceId };
+  // Chamber isolation: the current chamber, or the personal scope.
+  if (filters.chamberId !== undefined) {
+    Object.assign(where, chamberScopeFilter(filters.chamberId));
+  }
   if (filters.doctorId) where.doctorId = filters.doctorId;
   if (filters.patientId) where.patientId = filters.patientId;
   if (filters.date) {

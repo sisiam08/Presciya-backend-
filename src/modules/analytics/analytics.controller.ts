@@ -19,11 +19,15 @@ const getDashboardAnalytics = catchAsync(
     // Decide by workspace TYPE, not role alone: a personal-workspace OWNER is a
     // doctor, not an institution. Only institution workspaces (excluding
     // doctors) get institution analytics.
+    // Default scope is the ACTIVE workspace; `scope=all` is an explicit opt-in
+    // for the doctor's own workspaces only.
+    const scope = req.query.scope === "all" ? "all" : "workspace";
+
     const result =
       workspaceType === WorkspaceType.INSTITUTION &&
       workspaceRole !== WorkspaceRole.DOCTOR
         ? await AnalyticsServices.getInstitutionAnalytics(workspaceId)
-        : await AnalyticsServices.getDoctorAnalytics(userId);
+        : await AnalyticsServices.getDoctorAnalytics(userId, workspaceId, scope);
 
     sendResponse(res, {
       statusCode: Status.OK,

@@ -16,6 +16,7 @@ const upsertMyFee = catchAsync(async (req: Request, res: Response) => {
   const result = await FeeServices.upsertMyFee(
     userId,
     workspaceId,
+    req.body.chamberId,
     req.body,
     meta(req),
   );
@@ -30,7 +31,11 @@ const upsertMyFee = catchAsync(async (req: Request, res: Response) => {
 const getMyFee = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.id as string;
   const workspaceId = (req as any).workspaceId as string;
-  const result = await FeeServices.getMyFee(userId, workspaceId);
+  const result = await FeeServices.getMyFee(
+    userId,
+    workspaceId,
+    String(req.query.chamberId || ''),
+  );
   sendResponse(res, {
     statusCode: Status.OK,
     success: true,
@@ -43,7 +48,12 @@ const getDoctorFee = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.id as string;
   const workspaceId = (req as any).workspaceId as string;
   const doctorId = requireStringParam(req.params.doctorId, "Doctor ID");
-  const result = await FeeServices.getDoctorFee(userId, workspaceId, doctorId);
+  const result = await FeeServices.getDoctorFee(
+    userId,
+    workspaceId,
+    doctorId,
+    String(req.query.chamberId || ''),
+  );
   sendResponse(res, {
     statusCode: Status.OK,
     success: true,
