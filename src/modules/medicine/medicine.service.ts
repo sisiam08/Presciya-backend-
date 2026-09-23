@@ -29,7 +29,13 @@ const searchMedicines = async (
   userId: string,
   query: string,
   page: number = 1,
-  limit: number = 20
+  limit: number = 20,
+  /**
+   * Plan entitlement `medicine_favorites`. When false the frequently-used list
+   * is not served (and results are not flagged as favourites), so disabling the
+   * feature in the Admin panel stops it at the API rather than only in the UI.
+   */
+  favoritesAllowed: boolean = false
 ) => {
   await initSearchIndex();
 
@@ -44,7 +50,11 @@ const searchMedicines = async (
   const skip = (page - 1) * limit;
 
   // 1. If search input is empty, return doctor's favorites / most frequently used medicines immediately!
+  //    Gated: this list IS the `medicine_favorites` feature.
   if (!query || query.trim() === "") {
+    if (!favoritesAllowed) {
+      return { results: [], meta: { page, limit, total: 0, totalPages: 0 } };
+    }
     const favorites = await prisma.doctorFavoriteMedicine.findMany({
       where: { doctorId: doctor.id },
       orderBy: { frequencyCount: "desc" },
@@ -85,11 +95,15 @@ const searchMedicines = async (
       skip
     );
 
-    // Fetch favorites of this doctor to inject an 'isFavorite' flag
-    const doctorFavs = await prisma.doctorFavoriteMedicine.findMany({
-      where: { doctorId: doctor.id },
-      select: { medicineId: true },
-    });
+    // Fetch favorites of this doctor to inject an 'isFavorite' flag. Skipped
+    // entirely when the plan does not include the feature, so no favourite
+    // affordance is ever derived from a denied entitlement.
+    const doctorFavs = favoritesAllowed
+      ? await prisma.doctorFavoriteMedicine.findMany({
+          where: { doctorId: doctor.id },
+          select: { medicineId: true },
+        })
+      : [];
     const favSet = new Set(doctorFavs.map((f) => f.medicineId));
 
     const finalResults = results.map((item) => ({

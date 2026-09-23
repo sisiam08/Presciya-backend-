@@ -12,25 +12,8 @@ const auditMeta = (req: Request) => ({
 });
 
 // ─── Transactions ────────────────────────────────────────────────────────────
-
-const createTransaction = catchAsync(async (req: Request, res: Response) => {
-  const userId = req.user?.id as string;
-  const workspaceId = (req as any).workspaceId as string;
-
-  const result = await FinanceServices.createTransaction(
-    userId,
-    workspaceId,
-    req.body,
-    auditMeta(req),
-  );
-
-  sendResponse(res, {
-    statusCode: Status.CREATED,
-    success: true,
-    message: "Transaction recorded successfully",
-    data: result,
-  });
-});
+// No `createTransaction` handler: manual transaction creation was removed along
+// with the manual income/expense workflow. See finance.router.ts.
 
 const listTransactions = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.id as string;
@@ -233,7 +216,6 @@ const deleteCategory = catchAsync(async (req: Request, res: Response) => {
 });
 
 export const FinanceControllers = {
-  createTransaction,
   listTransactions,
   getTransaction,
   updateTransaction,

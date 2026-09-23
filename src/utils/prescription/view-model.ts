@@ -15,6 +15,7 @@ import {
   PrescriptionLabels,
 } from "./language";
 import { escapeHtml, escapeHtmlMultiline, formatDoctorName, safeUrl } from "./html";
+import { formatDosage } from "./dosage";
 
 export interface MedicineViewModel {
   index: number;
@@ -183,7 +184,7 @@ const buildDosage = (med: Record<string, any>): string => {
         .map(([key, value]) => `${key}: ${String(value)}`)
         .join(", ");
     }
-    return med.frequency || med.dosagePattern || "";
+    return formatDosage(med.frequency || med.dosagePattern || "");
   }
 
   // DAILY / STANDARD
@@ -194,7 +195,9 @@ const buildDosage = (med: Record<string, any>): string => {
   const structured = hasStructuredFrequency
     ? `${med.frequencyMorning ?? 0}+${med.frequencyNoon ?? 0}+${med.frequencyNight ?? 0}`
     : "";
-  return structured || med.dosagePattern || med.frequency || "";
+  // Presentation rule lives in ONE place (`./dosage`) so the UI and the printed
+  // document can never disagree again.
+  return formatDosage(structured || med.dosagePattern || med.frequency || "");
 };
 
 export const buildPrescriptionViewModel = (
@@ -249,7 +252,10 @@ export const buildPrescriptionViewModel = (
     minute: "2-digit",
   });
 
-  const phones = chamber?.chamberPhone?.map((p) => p.phone).join(", ") || "N/A";
+  // NO fabricated fallbacks: a personal-workspace prescription has no chamber,
+  // and inventing "N/A" / "Private Practice" / "Online Consultation" printed
+  // chamber branding that does not exist. Empty means "render nothing".
+  const phones = chamber?.chamberPhone?.map((p) => p.phone).join(", ") || "";
   const colorTheme = chamber?.templateConfig?.colorTheme || "#0f8374";
   const showLogo = chamber?.templateConfig?.showLogo !== false;
 
@@ -259,9 +265,14 @@ export const buildPrescriptionViewModel = (
 
   const verifyTarget = verificationCode || id;
   const verifyUrl = `${config.appUrl || "http://localhost:3000"}/verify/prescription/${verifyTarget}`;
-  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(
-    verifyUrl,
-  )}`;
+  // Public QR verification is a plan entitlement. When the active plan does not
+  // include it, no QR is generated (the rest of the document is unchanged).
+  const qrCodeUrl =
+    data.qrVerificationAllowed === false
+      ? ""
+      : `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(
+          verifyUrl,
+        )}`;
 
   const medicineVms: MedicineViewModel[] = (medicines || []).map((med, index) => {
     const usage = (med.usageType || "DAILY") as string;
@@ -349,9 +360,9 @@ export const buildPrescriptionViewModel = (
       bmdcApproved: Boolean(doctor.bmdcApproved),
     },
     chamber: {
-      name: escapeHtml(chamber?.chamberName || "Private Practice"),
-      slogan: escapeHtml(chamber?.chamberSlogan),
-      address: escapeHtml(chamber?.chamberAddress || "Online Consultation"),
+    name: escapeHtml(chamber?.chamberName || ""),
+    slogan: escapeHtml(chamber?.chamberSlogan),
+    address: escapeHtml(chamber?.chamberAddress || ""),
       email: escapeHtml(chamber?.chamberEmail),
       phones: escapeHtml(phones),
       logo: showLogo ? safeUrl(chamber?.logo) : "",

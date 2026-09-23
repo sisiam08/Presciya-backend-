@@ -2,20 +2,18 @@ import { prisma } from "../../lib/prisma";
 import { createAppError } from "../../errors/appError";
 import { Status } from "../../errors/httpStatus";
 import { WorkspaceType } from "../../../generated/prisma/enums";
+import { RequestScope, scopeFilter } from "../../utils/chamberScope";
 
 /**
  * Practice analytics for a doctor.
  *
- * By default everything is scoped to the CURRENT workspace, so switching
- * workspace switches the numbers. `scope: "all"` is an explicit opt-in that
- * aggregates across every workspace the doctor is a member of — it still never
- * includes another user's data.
+ * Uses the SAME `RequestScope` contract as every other module: the active
+ * workspace, narrowed to the active CHAMBER when one is selected, and widened to
+ * every authorized workspace only on an explicit "all". Filtering by workspace
+ * alone was the bug — the dashboard then counted every chamber's data while the
+ * Patients/Prescriptions/Appointments pages were chamber-scoped.
  */
-const getDoctorAnalytics = async (
-  userId: string,
-  workspaceId: string,
-  scope: "workspace" | "all" = "workspace",
-) => {
+const getDoctorAnalytics = async (userId: string, scope: RequestScope) => {
   const doctor = await prisma.doctor.findUnique({
     where: { userId },
   });
@@ -24,9 +22,13 @@ const getDoctorAnalytics = async (
     throw createAppError("Doctor profile not found", Status.NOT_FOUND);
   }
 
-  const allWorkspaces = scope === "all";
-  /** Applied to every query so the default is strictly the active workspace. */
-  const workspaceFilter = allWorkspaces ? {} : { workspaceId };
+  const allWorkspaces = scope.mode === "all";
+  /**
+   * Applied to EVERY metric so the default is strictly the active
+   * workspace + chamber. For "all" it is bounded to the authorized workspace
+   * ids (never an unbounded query).
+   */
+  const workspaceFilter = scopeFilter(scope);
 
   // 1. Total Patients Count
   const totalPatients = await prisma.patient.count({
@@ -40,11 +42,20 @@ const getDoctorAnalytics = async (
 
   // 3. Chambers Count — chambers inside the active workspace, or every chamber
   //    the doctor owns when explicitly viewing all workspaces.
+  // Chamber scope mirrors the rest of the app: "all" counts every chamber the
+  // doctor owns; a selected chamber counts just that one; personal scope counts
+  // the workspace's locations.
   const totalChambers = allWorkspaces
     ? await prisma.chamber.count({
         where: { workspace: { ownerId: doctor.userId }, isActive: true },
       })
-    : await prisma.chamber.count({ where: { workspaceId, isActive: true } });
+    : scope.chamberId
+      ? await prisma.chamber.count({
+          where: { id: scope.chamberId, isActive: true },
+        })
+      : await prisma.chamber.count({
+          where: { workspaceId: scope.workspaceId, isActive: true },
+        });
 
   // 4. Prescriptions Per Day (Last 7 Days Trend)
   const sevenDaysAgo = new Date();
@@ -272,6 +283,36 @@ const getInstitutionAnalytics = async (workspaceId: string) => {
       count: trendMap[date],
     }));
 
+  // 5b. Last 15 days consultation trend — the dashboard's line chart reads
+  //     `lineTrend`, so the institution shape must provide it too (it was
+  //     missing, which made that chart permanently flat for institutions).
+  const fifteenDaysAgo = new Date();
+  fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+  const linePrescriptions = institutionWorkspaceIds.length
+    ? await prisma.prescription.findMany({
+        where: {
+          workspaceId: { in: institutionWorkspaceIds },
+          isDeleted: false,
+          createdAt: { gte: fifteenDaysAgo },
+        },
+        select: { createdAt: true },
+      })
+    : [];
+
+  const lineMap: { [key: string]: number } = {};
+  for (let i = 0; i < 15; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    lineMap[d.toISOString().split("T")[0] as string] = 0;
+  }
+  linePrescriptions.forEach((item) => {
+    const dateStr = item.createdAt.toISOString().split("T")[0] as string;
+    if (lineMap[dateStr] !== undefined) lineMap[dateStr] += 1;
+  });
+  const formattedLineTrend = Object.keys(lineMap)
+    .sort()
+    .map((date) => ({ date, count: lineMap[date] }));
+
   // 6. Demographics
   const malePatients = institutionWorkspaceIds.length
     ? await prisma.patient.count({
@@ -292,6 +333,7 @@ const getInstitutionAnalytics = async (workspaceId: string) => {
       totalPatients,
     },
     prescriptionsTrend: formattedTrend,
+    lineTrend: formattedLineTrend,
     demographics: {
       male: malePatients,
       female: femalePatients,

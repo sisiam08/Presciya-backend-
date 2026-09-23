@@ -72,6 +72,10 @@ export const adminService = {  // User management
   // Subscription plan feature limits
   async listPlans() {
     return prisma.subscriptionVariant.findMany({
+      // Canonical business order (Free → Personal → Clinic → Institute), then
+      // creation order for any admin-created extras. Never rely on insertion or
+      // alphabetical order in the UI.
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       include: {
         planFeatures: {
           include: { feature: true },
@@ -93,6 +97,23 @@ export const adminService = {  // User management
   }) {
     if (!data.variantName?.trim()) {
       throw createAppError("Plan name is required", Status.BAD_REQUEST);
+    }
+
+    // Guard against an accidental duplicate. Renaming an existing plan is an
+    // UPDATE (`PATCH /admin/plans/:id`) and must never reach this path; if a
+    // name already exists we fail loudly instead of silently creating a second
+    // plan with the same display name.
+    const nameTaken = await prisma.subscriptionVariant.findFirst({
+      where: {
+        variantName: { equals: data.variantName.trim(), mode: "insensitive" },
+      },
+      select: { id: true },
+    });
+    if (nameTaken) {
+      throw createAppError(
+        "A plan with this name already exists. Rename the existing plan instead of creating a new one.",
+        Status.CONFLICT,
+      );
     }
 
     return prisma.subscriptionVariant.create({
@@ -135,7 +156,24 @@ export const adminService = {  // User management
       if (!String(data.variantName).trim()) {
         throw createAppError("Plan name cannot be empty", Status.BAD_REQUEST);
       }
-      update.variantName = String(data.variantName).trim();
+      const nextName = String(data.variantName).trim();
+      // Renaming is safe: identity is the immutable `key`/`id`, so a rename can
+      // never detach the plan from its subscriptions or entitlements. The only
+      // thing to prevent is colliding with ANOTHER plan's display name.
+      const clash = await prisma.subscriptionVariant.findFirst({
+        where: {
+          variantName: { equals: nextName, mode: "insensitive" },
+          id: { not: variantId },
+        },
+        select: { id: true },
+      });
+      if (clash) {
+        throw createAppError(
+          "Another plan already uses this name.",
+          Status.CONFLICT,
+        );
+      }
+      update.variantName = nextName;
     }
     if (data.price !== undefined) update.price = Number(data.price);
     if (data.dailyPrescriptionLimit !== undefined) {

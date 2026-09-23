@@ -12,6 +12,46 @@ import { checkUserVerification } from "../../utils/verificationCheck";
 import { SubscriptionServices } from "../subscription/subscription.service";
 import { FeatureServices } from "../feature/feature.service";
 import { normalizeBangladeshPhone } from "../../utils/phone";
+import {
+  hasFooterConfig,
+  hasText,
+  hasWatermarkConfig,
+} from "../../utils/branding";
+
+/**
+ * Prescription branding is plan-controlled: the footer/logo belong to
+ * `custom_branding`, the watermark to `watermark`. Each entitlement is only
+ * enforced when the payload actually writes that part, so creating or updating
+ * a chamber never fails with a late, generic entitlement error.
+ */
+const assertChamberBrandingAccess = async (
+  userId: string,
+  workspaceId: string,
+  data: { logo?: unknown; chamberSlogan?: unknown; templateConfig?: unknown },
+) => {
+  const brandingTouched = hasText(data.logo) || hasText(data.chamberSlogan);
+  const config = data.templateConfig as Parameters<typeof hasFooterConfig>[0];
+
+  if (brandingTouched || hasFooterConfig(config)) {
+    await FeatureServices.checkFeatureAccess({
+      featureKey: "custom_branding",
+      userId,
+      workspaceId,
+      trackUsage: false,
+      incrementBy: 0,
+    });
+  }
+
+  if (hasWatermarkConfig(config)) {
+    await FeatureServices.checkFeatureAccess({
+      featureKey: "watermark",
+      userId,
+      workspaceId,
+      trackUsage: false,
+      incrementBy: 0,
+    });
+  }
+};
 
 const createChamber = async (
   userId: string,
@@ -56,6 +96,10 @@ const createChamber = async (
 
   // Enforce the plan's chamber limit (Free plan = 1 chamber).
   await SubscriptionServices.assertChamberLimit(userId, workspaceId);
+
+  // Enforce prescription-branding entitlements on create too, so the create and
+  // update paths can never disagree.
+  await assertChamberBrandingAccess(userId, workspaceId, chamberData);
 
   return await prisma.$transaction(async (tx) => {
     const chamber = await tx.chamber.create({
@@ -145,16 +189,8 @@ const updateChamber = async (
   const { phones, ...chamberData } = data;
 
   // Chamber prescription customization (footer / watermark / logo settings) is
-  // a premium, admin-configurable feature — enforced here, not just in the UI.
-  if (chamberData.templateConfig !== undefined) {
-    await FeatureServices.checkFeatureAccess({
-      featureKey: "custom_branding",
-      userId,
-      workspaceId,
-      trackUsage: false,
-      incrementBy: 0,
-    });
-  }
+  // premium and admin-configurable — enforced here, not just in the UI.
+  await assertChamberBrandingAccess(userId, workspaceId, chamberData);
 
   const chamber = await prisma.chamber.findFirst({
     where: { id, workspaceId, isActive: true },
@@ -164,10 +200,30 @@ const updateChamber = async (
     throw createAppError("Chamber not found", Status.NOT_FOUND);
   }
 
+  // Map API field names to the Chamber columns. Passing the request body
+  // straight to Prisma made every edit that carried `chamberName` /
+  // `chamberAddress` / `chamberSlogan` fail with a Prisma validation error.
+  // Both the canonical API names and the aliases the UI sends are accepted.
+  const updateData: Record<string, any> = {};
+  const name = chamberData.chamberName ?? chamberData.name;
+  const address = chamberData.chamberAddress ?? chamberData.address;
+  const email = chamberData.chamberEmail ?? chamberData.email;
+  const slogan = chamberData.chamberSlogan ?? chamberData.footerText;
+
+  if (name !== undefined) updateData.name = name;
+  if (address !== undefined) updateData.address = address;
+  if (email !== undefined) updateData.email = email;
+  if (slogan !== undefined) updateData.footerText = slogan;
+  if (chamberData.logo !== undefined) updateData.logo = chamberData.logo;
+  if (chamberData.templateConfig !== undefined)
+    updateData.templateConfig = chamberData.templateConfig;
+  if (chamberData.isActive !== undefined)
+    updateData.isActive = chamberData.isActive;
+
   return await prisma.$transaction(async (tx) => {
     const updatedChamber = await tx.chamber.update({
       where: { id },
-      data: chamberData,
+      data: updateData,
     });
 
     if (phones) {

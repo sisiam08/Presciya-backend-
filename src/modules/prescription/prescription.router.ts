@@ -37,8 +37,13 @@ router.get(
   PrescriptionControllers.getMyPrescriptions,
 );
 
-// Settings: render a sample prescription for a template + language. Declared
-// before "/:id" so it is not swallowed by the id route.
+// Settings: render a sample prescription for a DESIGN template + language.
+// Declared before "/:id" so it is not swallowed by the id route.
+//
+// Rendering a sample of the built-in designs IS the design-template feature
+// ("preview different prescription designs"), so it carries the
+// `prescription_design_templates` entitlement — not the language and not the
+// saved-templates entitlement.
 router.get(
   "/template-preview",
   authWorkspace([
@@ -47,6 +52,10 @@ router.get(
     WorkspaceRole.ASSISTANT,
     WorkspaceRole.MANAGER,
   ]) as any,
+  requireFeatureAccess("prescription_design_templates", {
+    trackUsage: false,
+    incrementBy: 0,
+  }) as any,
   validateRequest(PrescriptionValidation.previewTemplateSampleSchema),
   PrescriptionControllers.previewTemplateSample,
 );

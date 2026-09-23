@@ -6,9 +6,11 @@ import { WorkspaceRole } from "../../../generated/prisma/enums";
 
 const router = Router();
 
-// Saved prescription templates are part of the premium "prescription language &
-// templates" feature (admin-configurable per plan), so every route is gated.
-const requireTemplates = requireFeatureAccess("prescription_language", {
+// SAVED (reusable) prescription templates have their OWN entitlement,
+// `prescription_templates`. This is a different feature from the built-in DESIGN
+// templates (`prescription_design_templates`) and from the prescription LANGUAGE
+// (`prescription_language`) — they must never unlock one another.
+const requireTemplates = requireFeatureAccess("prescription_templates", {
   trackUsage: false,
   incrementBy: 0,
 }) as any;

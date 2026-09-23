@@ -30,23 +30,8 @@ const groupBySchema = z.enum(["day", "week", "month", "year"]);
 const optionalUuid = z.string().uuid().optional();
 const nullableUuid = z.string().uuid().nullable().optional();
 
-const createTransactionSchema = z.object({
-  body: z.object({
-    // Target workspace. Defaults to the active workspace; when provided it must
-    // be one the caller can access (verified server-side).
-    workspaceId: optionalUuid,
-    type: z.nativeEnum(FinancialTransactionType),
-    amount: amountSchema,
-    categoryId: z.string().uuid("Category is required"),
-    paymentMethod: z.nativeEnum(PaymentMethod),
-    description: z.string().max(500).optional(),
-    notes: z.string().max(2000).optional(),
-    transactionDate: z.string().min(1, "Date is required"),
-    patientId: optionalUuid,
-    appointmentId: optionalUuid,
-    prescriptionId: optionalUuid,
-  }),
-});
+// No `createTransactionSchema`: manual transaction creation was removed (see
+// finance.router.ts). `updateTransactionSchema` below still governs corrections.
 
 const updateTransactionSchema = z.object({
   body: z.object({
@@ -126,7 +111,6 @@ const updateCategorySchema = z.object({
 });
 
 export const FinanceValidation = {
-  createTransactionSchema,
   updateTransactionSchema,
   listTransactionsSchema,
   summaryQuerySchema,

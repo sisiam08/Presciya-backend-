@@ -8,6 +8,7 @@ import {
   WorkspaceType,
 } from "../../../generated/prisma/enums";
 import { AuthenticatedRequest } from "../../middleware/auth";
+import { resolveRequestScope } from "../../utils/chamberScope";
 
 const getDashboardAnalytics = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
@@ -19,15 +20,16 @@ const getDashboardAnalytics = catchAsync(
     // Decide by workspace TYPE, not role alone: a personal-workspace OWNER is a
     // doctor, not an institution. Only institution workspaces (excluding
     // doctors) get institution analytics.
-    // Default scope is the ACTIVE workspace; `scope=all` is an explicit opt-in
-    // for the doctor's own workspaces only.
-    const scope = req.query.scope === "all" ? "all" : "workspace";
+    // Canonical scope resolution, identical to every other module: the active
+    // workspace, narrowed to the active chamber when one is selected, and widened
+    // only on an explicit "all" from the personal context.
+    const scope = await resolveRequestScope(userId, workspaceId, req as any);
 
     const result =
       workspaceType === WorkspaceType.INSTITUTION &&
       workspaceRole !== WorkspaceRole.DOCTOR
         ? await AnalyticsServices.getInstitutionAnalytics(workspaceId)
-        : await AnalyticsServices.getDoctorAnalytics(userId, workspaceId, scope);
+        : await AnalyticsServices.getDoctorAnalytics(userId, scope);
 
     sendResponse(res, {
       statusCode: Status.OK,

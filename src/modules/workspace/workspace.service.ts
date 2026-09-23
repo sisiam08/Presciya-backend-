@@ -16,6 +16,11 @@ import {
 } from "../../interface/workspace.type";
 import { checkUserVerification } from "../../utils/verificationCheck";
 import { FeatureServices } from "../feature/feature.service";
+import {
+  TemplateConfigLike,
+  hasFooterConfig,
+  hasWatermarkConfig,
+} from "../../utils/branding";
 
 // Generate URL-friendly slug
 const generateSlug = (name: string): string => {
@@ -252,16 +257,33 @@ const updateWorkspace = async (
   if (data.logo !== undefined) updateData.logo = data.logo;
   if (data.slogan !== undefined) updateData.slogan = data.slogan;
 
-  // Personal-prescription settings (custom footer / watermark) are a premium,
-  // admin-configurable feature — enforced here, not just in the UI.
+  // Personal-prescription settings are premium, admin-configurable features.
+  // Footer text and watermark are SEPARATE entitlements, and each is only
+  // enforced when the payload actually writes that part — so saving unrelated
+  // settings never fails with a late entitlement error.
   if (data.templateConfig !== undefined) {
-    await FeatureServices.checkFeatureAccess({
-      featureKey: "custom_branding",
-      userId,
-      workspaceId,
-      trackUsage: false,
-      incrementBy: 0,
-    });
+    const config = data.templateConfig as TemplateConfigLike | null;
+
+    if (hasFooterConfig(config)) {
+      await FeatureServices.checkFeatureAccess({
+        featureKey: "custom_branding",
+        userId,
+        workspaceId,
+        trackUsage: false,
+        incrementBy: 0,
+      });
+    }
+
+    if (hasWatermarkConfig(config)) {
+      await FeatureServices.checkFeatureAccess({
+        featureKey: "watermark",
+        userId,
+        workspaceId,
+        trackUsage: false,
+        incrementBy: 0,
+      });
+    }
+
     updateData.templateConfig = data.templateConfig;
   }
 

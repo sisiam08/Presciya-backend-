@@ -192,11 +192,17 @@ const previewTemplateSample = catchAsync(async (req: Request, res: Response) => 
   const language =
     (req.query.language as PrescriptionLanguage) ?? PrescriptionLanguage.ENGLISH;
 
+  // Honour the caller's active chamber, exactly like a real prescription: with
+  // a chamber the preview shows that chamber's branding, without one it shows
+  // the personal (workspace) prescription settings.
+  const chamberId = chamberIdFromRequest(req as any);
+
   const html = await PrescriptionServices.previewTemplateSample(
     userId,
     workspaceId,
     template,
     language,
+    chamberId,
   );
 
   res.setHeader("Content-Type", "text/html");

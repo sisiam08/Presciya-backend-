@@ -60,6 +60,12 @@ export interface IPdfRenderData {
   };
   serialNumber?: string | null;
   verificationCode?: string | null;
+  /**
+   * Plan entitlement `qr_verification`. When explicitly `false` the QR block is
+   * omitted from the rendered prescription. `undefined` (the historical
+   * behaviour) keeps rendering the QR.
+   */
+  qrVerificationAllowed?: boolean;
   /** Custom prescription footer (chamber footerText or personal settings). */
   footerText?: string | null;
   /**

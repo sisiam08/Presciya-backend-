@@ -29,12 +29,24 @@ const FEATURES: {
   { key: "qr_verification", description: "Public QR prescription verification", category: "verification" },
   { key: "analytics", description: "Analytics dashboards", category: "analytics" },
   { key: "custom_branding", description: "Custom institution branding", category: "branding" },
+  { key: "watermark", description: "Watermark on prescriptions", category: "branding" },
   { key: "medicine_favorites", description: "Frequently used medicine favorites", category: "medicines" },
   { key: "export", description: "Export prescriptions and records", category: "data" },
   { key: "max_chambers", description: "Maximum number of chambers", category: "workspaces" },
   { key: "finance", description: "Internal business finance", category: "finance" },
   { key: "visiting_fees", description: "Configure visiting / follow-up fees", category: "finance" },
-  { key: "prescription_language", description: "Change prescription language and templates", category: "prescriptions" },
+  // ── Three INDEPENDENT prescription features ────────────────────────────────
+  // These are deliberately separate entitlements and must never be collapsed
+  // into one another:
+  //   prescription_language         → the language the prescription is written in
+  //   prescription_design_templates → the BUILT-IN visual designs (Classic,
+  //                                   Modern Clinical, Minimal Professional,
+  //                                   Modern Medical, Elegant Compact)
+  //   prescription_templates        → the doctor's SAVED/reusable prescriptions
+  //                                   (complaints / advises / medicines)
+  { key: "prescription_language", description: "Change the prescription language", category: "prescriptions" },
+  { key: "prescription_design_templates", description: "Choose between the built-in prescription designs", category: "prescriptions" },
+  { key: "prescription_templates", description: "Save and reuse your own prescription templates", category: "prescriptions" },
   // Not part of the current public release. Disabled by default globally; the
   // implementation stays in the codebase and can be switched on from the admin
   // panel when institution functionality is finished.
@@ -42,7 +54,15 @@ const FEATURES: {
 ];
 
 const VARIANTS: {
+  /**
+   * STABLE identity. The seed matches on this — never on `variantName`, because
+   * an admin may rename a plan and a name-based lookup would then create a
+   * duplicate of the old plan on the next seed run.
+   */
+  key: string;
   variantName: string;
+  /** Canonical business order: Free → Personal → Clinic → Institute. */
+  sortOrder: number;
   dailyPrescriptionLimit: number;
   price: number;
   description: Record<string, string>;
@@ -50,6 +70,8 @@ const VARIANTS: {
   isActive?: boolean;
 }[] = [
   {
+    key: "free_trial",
+    sortOrder: 1,
     variantName: "Free Trial",
     dailyPrescriptionLimit: 3,
     price: 0,
@@ -59,6 +81,8 @@ const VARIANTS: {
     },
   },
   {
+    key: "personal",
+    sortOrder: 2,
     variantName: "Personal Doctor",
     dailyPrescriptionLimit: 100,
     price: 499,
@@ -68,6 +92,8 @@ const VARIANTS: {
     },
   },
   {
+    key: "small_clinic",
+    sortOrder: 3,
     variantName: "Small Clinic",
     dailyPrescriptionLimit: 500,
     price: 1999,
@@ -77,6 +103,8 @@ const VARIANTS: {
     },
   },
   {
+    key: "enterprise",
+    sortOrder: 4,
     variantName: "Hospital Enterprise",
     dailyPrescriptionLimit: 9999,
     price: 7999,
@@ -111,6 +139,8 @@ const PLAN_FEATURES: Record<string, { key: string; limit: number | null }[]> = {
     { key: "finance", limit: null },
     { key: "visiting_fees", limit: null },
     { key: "prescription_language", limit: null },
+    { key: "prescription_design_templates", limit: null },
+    { key: "prescription_templates", limit: null },
     { key: "max_chambers", limit: 3 },
   ],
   "Small Clinic": [
@@ -120,11 +150,14 @@ const PLAN_FEATURES: Record<string, { key: string; limit: number | null }[]> = {
     { key: "qr_verification", limit: null },
     { key: "analytics", limit: null },
     { key: "custom_branding", limit: null },
+    { key: "watermark", limit: null },
     { key: "medicine_favorites", limit: null },
     { key: "export", limit: null },
     { key: "finance", limit: null },
     { key: "visiting_fees", limit: null },
     { key: "prescription_language", limit: null },
+    { key: "prescription_design_templates", limit: null },
+    { key: "prescription_templates", limit: null },
     { key: "max_chambers", limit: 5 },
   ],
   "Hospital Enterprise": [
@@ -134,11 +167,14 @@ const PLAN_FEATURES: Record<string, { key: string; limit: number | null }[]> = {
     { key: "qr_verification", limit: null },
     { key: "analytics", limit: null },
     { key: "custom_branding", limit: null },
+    { key: "watermark", limit: null },
     { key: "medicine_favorites", limit: null },
     { key: "export", limit: null },
     { key: "finance", limit: null },
     { key: "visiting_fees", limit: null },
     { key: "prescription_language", limit: null },
+    { key: "prescription_design_templates", limit: null },
+    { key: "prescription_templates", limit: null },
     { key: "max_chambers", limit: null },
   ],
 };
@@ -278,21 +314,38 @@ async function seedFinancialCategories() {
 
 async function seedPlans() {
   for (const variant of VARIANTS) {
-    const existing = await prisma.subscriptionVariant.findFirst({
-      where: { variantName: variant.variantName },
-    });
-
-    const record =
-      existing ??
-      (await prisma.subscriptionVariant.create({
-        data: {
-          variantName: variant.variantName,
-          description: variant.description,
-          dailyPrescriptionLimit: variant.dailyPrescriptionLimit,
-          price: variant.price,
-          isActive: variant.isActive ?? true,
-        },
+    // Match by STABLE KEY. A name-based lookup is what created duplicate plans
+    // whenever an admin renamed one, so `variantName` is only used as a
+    // one-time adoption fallback for rows that predate the key column.
+    const existing =
+      (await prisma.subscriptionVariant.findUnique({
+        where: { key: variant.key },
+      })) ??
+      (await prisma.subscriptionVariant.findFirst({
+        where: { variantName: variant.variantName, key: null },
       }));
+
+    const record = existing
+      ? await prisma.subscriptionVariant.update({
+          where: { id: existing.id },
+          data: {
+            // Adopt the key + canonical order, but NEVER touch admin-owned
+            // metadata (name, price, description, active flag).
+            key: variant.key,
+            sortOrder: variant.sortOrder,
+          },
+        })
+      : await prisma.subscriptionVariant.create({
+          data: {
+            key: variant.key,
+            sortOrder: variant.sortOrder,
+            variantName: variant.variantName,
+            description: variant.description,
+            dailyPrescriptionLimit: variant.dailyPrescriptionLimit,
+            price: variant.price,
+            isActive: variant.isActive ?? true,
+          },
+        });
 
     const features = PLAN_FEATURES[variant.variantName] ?? [];
     for (const pf of features) {

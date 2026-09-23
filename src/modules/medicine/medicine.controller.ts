@@ -4,16 +4,30 @@ import { MedicineServices } from "./medicine.service";
 import sendResponse from "../../utils/sendResponse";
 import { Status } from "../../errors/httpStatus";
 import { requireStringParam } from "../../utils/requestParams";
+import { FeatureServices } from "../feature/feature.service";
 
 const searchMedicines = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.id as string;
+  const workspaceId = (req as any).workspaceId as string;
   const { q = "", page = 1, limit = 20 } = req.query;
+
+  // The EMPTY-query branch of search returns the doctor's frequently-used
+  // medicines — that IS the `medicine_favorites` feature. Plain searching (with
+  // a query) stays open because it powers the prescription autocomplete.
+  // Enforced here so turning the plan feature off actually stops the feature
+  // rather than only hiding it in the UI.
+  const favoritesAllowed = await FeatureServices.isFeatureAllowed({
+    userId,
+    workspaceId,
+    featureKey: "medicine_favorites",
+  });
 
   const result = await MedicineServices.searchMedicines(
     userId,
     q as string,
     Number(page),
     Number(limit),
+    favoritesAllowed,
   );
 
   sendResponse(res, {

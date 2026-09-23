@@ -29,8 +29,41 @@ const BASE_STYLES = `
     min-height: 262mm;
   }
   .doc { flex: 1; display: flex; flex-direction: column; position: relative; z-index: 1; }
-  /* Footer/signature always anchors to the bottom of the final page. */
-  .page-footer { margin-top: auto; }
+  /* ── Bottom region ──────────────────────────────────────────────────────
+     ONE bottom-anchored block containing the custom footer/contact text AND
+     the QR + signature row. Previously the auto top-margin sat on the
+     QR/signature row only, so the contact text stayed immediately after the
+     content and floated in the middle of the page while the signature dropped
+     to the bottom. Anchoring the whole region keeps the intended order:
+       content → flexible space → footer text → QR/signature → bottom margin */
+  .page-footer-region {
+    margin-top: auto;
+    /* Explicit bottom breathing room after the LAST line of the footer. The
+       @page margin is not enough on its own: the footer/contact text must never
+       touch the bottom edge, and the same spacing applies to every template
+       because this rule is shared. */
+    padding-bottom: 8mm;
+    /* The footer is ONE unit: QR + signature row AND the contact text below it.
+       Without this the print engine fragmented the region across the page
+       boundary — the QR/signature stayed on the last content page while the
+       contact line was orphaned onto a further, otherwise-blank page. */
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .page-footer {
+    display: flex;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    /* Left = QR slot, right = signature. Never depends on how many children
+       exist: the left slot is always rendered and the right slot is pushed
+       across with an auto left margin, so the signature never slides left when
+       the QR is absent. */
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 12px;
+  }
+  .page-footer .footer-left { flex: 0 1 auto; min-width: 0; }
+  .page-footer .footer-right { margin-left: auto; flex: 0 0 auto; }
   /* Keep every direct document block above the watermark layer. Must come
      BEFORE .rx-watermark so the watermark keeps its absolute positioning. */
   .doc > * { position: relative; z-index: 1; }
@@ -189,11 +222,14 @@ const signatureBlock = (vm: PrescriptionViewModel, extraClass = ""): string => `
         : `<div class="sig-space"></div>`
     }
     <div class="sig-line">${vm.doctor.name}</div>
-    <div class="sig-role">Registered Practitioner</div>
   </div>
 `;
 
-const qrBlock = (vm: PrescriptionViewModel, extraClass = ""): string => `
+// Renders nothing when no QR was generated (e.g. the plan does not include
+// public QR verification), so a restricted plan never prints a broken image.
+const qrBlock = (vm: PrescriptionViewModel, extraClass = ""): string => {
+  if (!vm.qrCodeUrl) return "";
+  return `
   <div class="footer-qr ${extraClass}">
     <img class="qr-image" src="${vm.qrCodeUrl}" alt="Verification QR Code">
     <div class="qr-text">
@@ -202,13 +238,7 @@ const qrBlock = (vm: PrescriptionViewModel, extraClass = ""): string => `
     </div>
   </div>
 `;
-
-const generatedMeta = (vm: PrescriptionViewModel): string => `
-  <div class="footer-meta">
-    <div class="footer-disclaimer">${vm.disclaimer}</div>
-    <div class="footer-generated">Generated: ${vm.generatedAtStr}</div>
-  </div>
-`;
+};
 
 const bmdcChip = (vm: PrescriptionViewModel): string =>
   vm.doctor.registrationNo && vm.doctor.bmdcApproved
@@ -221,13 +251,6 @@ const bmdcChip = (vm: PrescriptionViewModel): string =>
 
 const defaultTemplate = (vm: PrescriptionViewModel): TemplateParts => {
   const styles = `
-    .watermark {
-      position: absolute; top: 50%; left: 50%;
-      transform: translate(-50%, -50%) rotate(-30deg);
-      font-size: 100px; color: rgba(15, 131, 116, 0.04);
-      font-weight: 700; text-transform: uppercase;
-      pointer-events: none; z-index: 0; letter-spacing: 5px; white-space: nowrap;
-    }
     .header {
       display: flex; justify-content: space-between;
       border-bottom: 3px solid ${vm.colorTheme}; padding-bottom: 12px; margin-bottom: 15px;
@@ -304,7 +327,6 @@ const defaultTemplate = (vm: PrescriptionViewModel): TemplateParts => {
     .join("");
 
   const body = `
-  <div class="watermark">Presciya</div>
   <div class="doc">
     ${watermarkLayer(vm)}
     <div class="header">
@@ -316,10 +338,10 @@ const defaultTemplate = (vm: PrescriptionViewModel): TemplateParts => {
       </div>
       <div class="chamber-info">
         ${vm.chamber.logo ? `<img class="chamber-logo" src="${vm.chamber.logo}" alt="Chamber Logo">` : ""}
-        <h2 class="chamber-name">${vm.chamber.name}</h2>
+        ${vm.chamber.name ? `<h2 class="chamber-name">${vm.chamber.name}</h2>` : ""}
         ${vm.chamber.slogan ? `<p class="chamber-slogan">${vm.chamber.slogan}</p>` : ""}
-        <p class="chamber-detail">${vm.chamber.address}</p>
-        ${vm.chamber.phones !== "N/A" ? `<p class="chamber-detail">📞 ${vm.chamber.phones}</p>` : ""}
+        ${vm.chamber.address ? `<p class="chamber-detail">${vm.chamber.address}</p>` : ""}
+        ${vm.chamber.phones ? `<p class="chamber-detail">📞 ${vm.chamber.phones}</p>` : ""}
         ${vm.chamber.email ? `<p class="chamber-detail">✉️ ${vm.chamber.email}</p>` : ""}
       </div>
     </div>
@@ -336,11 +358,11 @@ const defaultTemplate = (vm: PrescriptionViewModel): TemplateParts => {
 
     <div class="content-body">
       <div class="left-column">
+        ${examinationSection(vm, DEFAULT_SECTION)}
         ${vm.complaints ? `<div class="section-title">Complaints</div><div class="notes-content">${vm.complaints}</div>` : ""}
         ${historySection(vm, DEFAULT_SECTION)}
         ${vm.diagnosis ? `<div class="section-title">Diagnosis</div><div class="notes-content">${vm.diagnosis}</div>` : ""}
         ${investigationSection(vm, DEFAULT_SECTION)}
-        ${examinationSection(vm, DEFAULT_SECTION)}
         ${
           vm.hasMedicalHistory
             ? `<div class="section-title">Medical History</div>
@@ -360,11 +382,12 @@ const defaultTemplate = (vm: PrescriptionViewModel): TemplateParts => {
       </div>
     </div>
 
-    ${customFooter(vm)}
-    <div class="page-footer">
-      ${qrBlock(vm)}
-      ${generatedMeta(vm)}
-      ${signatureBlock(vm)}
+    <div class="page-footer-region">
+      <div class="page-footer">
+        <div class="footer-left">${qrBlock(vm)}</div>
+        <div class="footer-right">${signatureBlock(vm)}</div>
+      </div>
+      ${customFooter(vm)}
     </div>
   </div>`;
 
@@ -467,9 +490,9 @@ const modernClinicalTemplate = (vm: PrescriptionViewModel): TemplateParts => {
         ${vm.doctor.specialization ? `<p class="mc-spec">${vm.doctor.specialization}</p>` : ""}
       </div>
       <div class="mc-chamber">
-        <h2 class="mc-chamber-name">${vm.chamber.name}</h2>
-        <p class="mc-chamber-line">${vm.chamber.address}</p>
-        ${vm.chamber.phones !== "N/A" ? `<p class="mc-chamber-line">${vm.chamber.phones}</p>` : ""}
+        ${vm.chamber.name ? `<h2 class="mc-chamber-name">${vm.chamber.name}</h2>` : ""}
+        ${vm.chamber.address ? `<p class="mc-chamber-line">${vm.chamber.address}</p>` : ""}
+        ${vm.chamber.phones ? `<p class="mc-chamber-line">${vm.chamber.phones}</p>` : ""}
         ${vm.chamber.email ? `<p class="mc-chamber-line">${vm.chamber.email}</p>` : ""}
         ${bmdcChip(vm)}
       </div>
@@ -487,13 +510,13 @@ const modernClinicalTemplate = (vm: PrescriptionViewModel): TemplateParts => {
 
     <div class="mc-clinical">
       <div>
+        ${examinationSection(vm, MC_SECTION)}
         ${vm.complaints ? `<p class="mc-sec-title">Complaints</p><p class="mc-text">${vm.complaints}</p>` : ""}
         ${historySection(vm, MC_SECTION)}
         ${vm.diagnosis ? `<p class="mc-sec-title">Diagnosis</p><p class="mc-text">${vm.diagnosis}</p>` : ""}
         ${investigationSection(vm, MC_SECTION)}
       </div>
       <div>
-        ${examinationSection(vm, MC_SECTION)}
         ${
           vm.hasMedicalHistory
             ? `${vm.patient.chronicDiseases ? `<p class="mc-vital"><strong>Chronic:</strong> ${vm.patient.chronicDiseases}</p>` : ""}
@@ -515,11 +538,12 @@ const modernClinicalTemplate = (vm: PrescriptionViewModel): TemplateParts => {
       <div><p class="mc-sec-title">${vm.labels.nextVisit}</p><p class="mc-text" style="font-weight:600;color:${vm.colorTheme};">${vm.nextVisitStr}</p></div>
     </div>
 
-    ${customFooter(vm)}
-    <div class="page-footer">
-      ${qrBlock(vm)}
-      ${generatedMeta(vm)}
-      ${signatureBlock(vm)}
+    <div class="page-footer-region">
+      <div class="page-footer">
+        <div class="footer-left">${qrBlock(vm)}</div>
+        <div class="footer-right">${signatureBlock(vm)}</div>
+      </div>
+      ${customFooter(vm)}
     </div>
   </div>`;
 
@@ -602,9 +626,9 @@ const minimalProfessionalTemplate = (
         ${vm.doctor.specialization ? `<p class="mp-qual">${vm.doctor.specialization}</p>` : ""}
       </div>
       <div class="mp-chamber">
-        <p class="mp-chamber-name">${vm.chamber.name}</p>
-        <p class="mp-chamber-line">${vm.chamber.address}</p>
-        ${vm.chamber.phones !== "N/A" ? `<p class="mp-chamber-line">${vm.chamber.phones}</p>` : ""}
+        ${vm.chamber.name ? `<p class="mp-chamber-name">${vm.chamber.name}</p>` : ""}
+        ${vm.chamber.address ? `<p class="mp-chamber-line">${vm.chamber.address}</p>` : ""}
+        ${vm.chamber.phones ? `<p class="mp-chamber-line">${vm.chamber.phones}</p>` : ""}
         ${vm.chamber.email ? `<p class="mp-chamber-line">${vm.chamber.email}</p>` : ""}
         ${bmdcChip(vm)}
       </div>
@@ -621,11 +645,11 @@ const minimalProfessionalTemplate = (
     </div>
     <hr class="mp-rule">
 
+    ${vm.hasExamination ? `<div class="mp-notes"><div>${examinationSection(vm, MP_SECTION)}</div></div>` : ""}
     ${vm.complaints ? `<div class="mp-notes"><div><p class="mp-sec-title">Complaints</p><p class="mp-text">${vm.complaints}</p></div></div>` : ""}
     ${vm.history ? `<div class="mp-notes"><div>${historySection(vm, MP_SECTION)}</div></div>` : ""}
     ${vm.diagnosis ? `<div class="mp-notes"><div><p class="mp-sec-title">Diagnosis</p><p class="mp-text">${vm.diagnosis}</p></div></div>` : ""}
     ${vm.hasInvestigations ? `<div class="mp-notes"><div>${investigationSection(vm, MP_SECTION)}</div></div>` : ""}
-    ${vm.hasExamination ? `<div class="mp-notes"><div>${examinationSection(vm, MP_SECTION)}</div></div>` : ""}
 
     <div class="mp-rx">Rx</div>
     ${medicinesHtml}
@@ -636,11 +660,12 @@ const minimalProfessionalTemplate = (
       <div><p class="mp-sec-title">${vm.labels.nextVisit}</p><p class="mp-text" style="font-weight:600;">${vm.nextVisitStr}</p></div>
     </div>
 
-    ${customFooter(vm)}
-    <div class="page-footer">
-      ${qrBlock(vm)}
-      ${generatedMeta(vm)}
-      ${signatureBlock(vm)}
+    <div class="page-footer-region">
+      <div class="page-footer">
+        <div class="footer-left">${qrBlock(vm)}</div>
+        <div class="footer-right">${signatureBlock(vm)}</div>
+      </div>
+      ${customFooter(vm)}
     </div>
   </div>`;
 
@@ -735,9 +760,9 @@ const modernMedicalTemplate = (vm: PrescriptionViewModel): TemplateParts => {
         </div>
       </div>
       <div class="mm-band-right">
-        <p class="mm-chamber">${vm.chamber.name}</p>
-        <p class="mm-contact">${vm.chamber.address}</p>
-        ${vm.chamber.phones !== "N/A" ? `<p class="mm-contact">${vm.chamber.phones}</p>` : ""}
+        ${vm.chamber.name ? `<p class="mm-chamber">${vm.chamber.name}</p>` : ""}
+        ${vm.chamber.address ? `<p class="mm-contact">${vm.chamber.address}</p>` : ""}
+        ${vm.chamber.phones ? `<p class="mm-contact">${vm.chamber.phones}</p>` : ""}
         ${vm.doctor.registrationNo && vm.doctor.bmdcApproved ? `<span class="mm-bmdc">BMDC: ${vm.doctor.registrationNo}</span>` : ""}
       </div>
     </div>
@@ -754,13 +779,13 @@ const modernMedicalTemplate = (vm: PrescriptionViewModel): TemplateParts => {
 
     <div class="mm-grid">
       <div>
+        ${examinationSection(vm, MM_SECTION)}
         ${vm.complaints ? `<p class="mm-sec-title">Complaints</p><p class="mm-text">${vm.complaints}</p>` : ""}
         ${historySection(vm, MM_SECTION)}
         ${vm.diagnosis ? `<p class="mm-sec-title">Diagnosis</p><p class="mm-text">${vm.diagnosis}</p>` : ""}
         ${investigationSection(vm, MM_SECTION)}
       </div>
       <div>
-        ${examinationSection(vm, MM_SECTION)}
         ${
           vm.hasMedicalHistory
             ? `${vm.patient.chronicDiseases ? `<p class="mm-vital"><strong>Chronic:</strong> ${vm.patient.chronicDiseases}</p>` : ""}
@@ -782,11 +807,12 @@ const modernMedicalTemplate = (vm: PrescriptionViewModel): TemplateParts => {
       <div><p class="mm-sec-title">${vm.labels.nextVisit}</p><p class="mm-text" style="font-weight:600;color:${vm.colorTheme};">${vm.nextVisitStr}</p></div>
     </div>
 
-    ${customFooter(vm)}
-    <div class="page-footer">
-      ${qrBlock(vm)}
-      ${generatedMeta(vm)}
-      ${signatureBlock(vm)}
+    <div class="page-footer-region">
+      <div class="page-footer">
+        <div class="footer-left">${qrBlock(vm)}</div>
+        <div class="footer-right">${signatureBlock(vm)}</div>
+      </div>
+      ${customFooter(vm)}
     </div>
   </div>`;
 
@@ -877,8 +903,8 @@ const elegantCompactTemplate = (vm: PrescriptionViewModel): TemplateParts => {
       </div>
       <div class="ec-right">
         ${vm.chamber.logo ? `<img class="ec-logo" src="${vm.chamber.logo}" alt="Logo">` : ""}
-        <p class="ec-chamber">${vm.chamber.name}</p>
-        <p class="ec-contact">${vm.chamber.address}${vm.chamber.phones !== "N/A" ? ` · ${vm.chamber.phones}` : ""}</p>
+        ${vm.chamber.name ? `<p class="ec-chamber">${vm.chamber.name}</p>` : ""}
+        ${vm.chamber.address || vm.chamber.phones ? `<p class="ec-contact">${vm.chamber.address}${vm.chamber.phones ? ` · ${vm.chamber.phones}` : ""}</p>` : ""}
         ${vm.doctor.registrationNo && vm.doctor.bmdcApproved ? `<p class="ec-contact ec-bmdc">BMDC: ${vm.doctor.registrationNo}</p>` : ""}
       </div>
     </div>
@@ -895,11 +921,11 @@ const elegantCompactTemplate = (vm: PrescriptionViewModel): TemplateParts => {
 
     <div class="ec-body">
       <div class="ec-side">
+        ${examinationSection(vm, EC_SECTION)}
         ${vm.complaints ? `<div class="ec-sec-title">Complaints</div><div class="ec-text">${vm.complaints}</div>` : ""}
         ${historySection(vm, EC_SECTION)}
         ${vm.diagnosis ? `<div class="ec-sec-title">Diagnosis</div><div class="ec-text">${vm.diagnosis}</div>` : ""}
         ${investigationSection(vm, EC_SECTION)}
-        ${examinationSection(vm, EC_SECTION)}
         ${
           vm.hasMedicalHistory
             ? `<div class="ec-sec-title">History</div>
@@ -919,11 +945,12 @@ const elegantCompactTemplate = (vm: PrescriptionViewModel): TemplateParts => {
       </div>
     </div>
 
-    ${customFooter(vm)}
-    <div class="page-footer">
-      ${qrBlock(vm)}
-      ${generatedMeta(vm)}
-      ${signatureBlock(vm)}
+    <div class="page-footer-region">
+      <div class="page-footer">
+        <div class="footer-left">${qrBlock(vm)}</div>
+        <div class="footer-right">${signatureBlock(vm)}</div>
+      </div>
+      ${customFooter(vm)}
     </div>
   </div>`;
 

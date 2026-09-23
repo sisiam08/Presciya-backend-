@@ -459,79 +459,11 @@ const TRANSACTION_INCLUDE = {
   prescription: { select: { id: true, serialNumber: true } },
 } as const;
 
-const createTransaction = async (
-  userId: string,
-  activeWorkspaceId: string,
-  data: {
-    workspaceId?: string;
-    type: FinancialTransactionType;
-    amount: string | number;
-    categoryId: string;
-    paymentMethod: any;
-    description?: string;
-    notes?: string;
-    transactionDate: string;
-    patientId?: string;
-    appointmentId?: string;
-    prescriptionId?: string;
-  },
-  meta?: { ipAddress?: string | undefined; userAgent?: string | undefined },
-) => {
-  const workspaceId = data.workspaceId ?? activeWorkspaceId;
-  const accessible = await getAccessibleWorkspaceIds(userId);
-  if (!accessible.includes(workspaceId)) {
-    throw createAppError(
-      "You do not have access to this workspace",
-      Status.FORBIDDEN,
-    );
-  }
-  await assertFinancePermission(userId, workspaceId, "finance_create");
-
-  const category = await resolveCategory(
-    data.categoryId,
-    data.type,
-    workspaceId,
-  );
-  await assertReferences(workspaceId, data);
-
-  const tx = await prisma.financialTransaction.create({
-    data: {
-      workspaceId,
-      createdById: userId,
-      type: data.type,
-      amount: String(data.amount).trim(), // decimal string → Prisma Decimal
-      categoryId: category.id,
-      paymentMethod: data.paymentMethod,
-      description: data.description ?? null,
-      notes: data.notes ?? null,
-      transactionDate: parseTransactionDate(data.transactionDate),
-      patientId: data.patientId ?? null,
-      appointmentId: data.appointmentId ?? null,
-      prescriptionId: data.prescriptionId ?? null,
-    },
-    include: TRANSACTION_INCLUDE,
-  });
-
-  await AuditService.logAudit({
-    userId,
-    workspaceId,
-    actionType: AuditActionType.CREATE,
-    entityType: AuditEntityType.FINANCIAL_TRANSACTION,
-    entityId: tx.id,
-    newValues: {
-      type: tx.type,
-      amount: tx.amount.toString(),
-      category: tx.category?.name,
-      paymentMethod: tx.paymentMethod,
-      transactionDate: tx.transactionDate,
-      description: tx.description,
-    },
-    ipAddress: meta?.ipAddress,
-    userAgent: meta?.userAgent,
-  });
-
-  return serializeTransaction(tx);
-};
+// NOTE: there is deliberately no `createTransaction` here. Ledger rows are only
+// ever produced by the payment workflow (appointment payment →
+// `recordAppointmentIncome` in the appointment module); hand-creating a row
+// would bypass that workflow. `resolveCategory`, `assertReferences` and
+// `parseTransactionDate` remain because `updateTransaction` still uses them.
 
 const buildTransactionWhere = (
   workspaceIds: string[],
@@ -1059,7 +991,6 @@ export const FinanceServices = {
   createCategory,
   updateCategory,
   deleteCategory,
-  createTransaction,
   listTransactions,
   getTransaction,
   updateTransaction,

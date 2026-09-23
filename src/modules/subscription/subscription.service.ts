@@ -330,9 +330,14 @@ const assertChamberLimit = async (userId: string, workspaceId: string) => {
  * same source of truth the backend gates on.
  */
 const getAvailablePlans = async () => {
+  // INACTIVE plans are listed too — the UI shows them as "Coming Soon" with the
+  // price hidden. Purchasing an inactive plan is still refused server-side
+  // (`createSubscription` resolves the variant with `isActive: true`), so this
+  // only affects presentation.
   return await prisma.subscriptionVariant.findMany({
-    where: { isActive: true },
-    orderBy: { price: "asc" },
+    // Same canonical order as the Admin panel (Free → Personal → Clinic →
+    // Institute). Price order is NOT the business order.
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     include: {
       planFeatures: {
         include: {

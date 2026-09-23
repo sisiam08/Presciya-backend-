@@ -823,20 +823,29 @@ model ClinicalObservation {
 }
 
 model SubscriptionVariant {
-  id                     String  @id @default(uuid())
+  id String @id @default(uuid())
+  /// Stable, immutable identity for a plan. `variantName` is DISPLAY metadata
+  /// and may be renamed by an admin at any time, so it must never be used to
+  /// identify a plan — doing so made re-seeding create a duplicate plan after a
+  /// rename. Nullable only for legacy/admin-created rows with no known key.
+  key                    String? @unique
   variantName            String
   description            Json
   dailyPrescriptionLimit Int
   price                  Float
   isActive               Boolean @default(true)
-
+  /// Canonical business ordering for plan lists (Free → Personal → Clinic →
+  /// Institute). Lower first; ties fall back to createdAt. Never rely on
+  /// insertion order, price or alphabetical sorting in a UI.
+  sortOrder              Int     @default(100)
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
+  
   subscriptions            Subscription[]
   planFeatures             PlanFeature[]
   institutionSubscriptions InstitutionSubscription[]
-
+  
   @@map("subscription_variants")
 }
 

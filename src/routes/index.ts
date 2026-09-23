@@ -21,6 +21,7 @@ import { FinanceRouters } from "../modules/finance/finance.router";
 import { FeeRouters } from "../modules/fee/fee.router";
 import { RevenueRouters } from "../modules/revenue/revenue.router";
 import { SystemRouters } from "../modules/system/system.router";
+import { UploadRouters } from "../modules/upload/upload.router";
 
 const router = Router();
 
@@ -116,6 +117,10 @@ const routes: IRoute[] = [
   {
     path: "/system",
     route: SystemRouters,
+  },
+  {
+    path: "/uploads",
+    route: UploadRouters,
   },
 ];
 

@@ -78,4 +78,24 @@ export const upload = multer({
   },
 });
 
+const IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const IMAGE_SIZE_LIMIT = 5 * 1024 * 1024;
+
+/**
+ * Image-only upload used for logos, watermarks and signatures. Same in-memory
+ * storage as `upload` (the single file lands in Cloudinary via
+ * `uploadFileToCloudinary`), but restricted to real image types and capped at a
+ * sane 5 MB so a stray 50 MB PDF can never be stored as a "logo".
+ */
+export const uploadImage = multer({
+  storage: memoryStorage,
+  limits: { fileSize: IMAGE_SIZE_LIMIT, files: 1 },
+  fileFilter: (req, file, cb) => {
+    if (!IMAGE_MIME_TYPES.includes(file.mimetype)) {
+      return cb(new Error("Only JPEG, PNG or WebP images are allowed."));
+    }
+    cb(null, true);
+  },
+});
+
 export { memoryStorage as storage, cloudinaryStorage };

@@ -100,8 +100,32 @@ const checkFeatureAccess = async (
   });
 };
 
+/**
+ * Non-throwing variant of `checkFeatureAccess` for places that only need to
+ * know whether the active plan includes a feature (e.g. deciding whether to
+ * render a prescription watermark) rather than guard an endpoint. It reuses the
+ * exact same centralized resolution, so it can never disagree with the guards.
+ */
+const isFeatureAllowed = async (params: {
+  userId: string;
+  workspaceId: string;
+  featureKey: string;
+}): Promise<boolean> => {
+  try {
+    await checkFeatureAccess({
+      ...params,
+      trackUsage: false,
+      incrementBy: 0,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export const FeatureServices = {
   checkFeatureAccess,
+  isFeatureAllowed,
   isGloballyEnabled,
   isInstitutionEnabled,
   assertInstitutionEnabled,

@@ -121,24 +121,31 @@ const updateDoctorProfile = catchAsync(async (req: Request, res: Response) => {
 
   const userId = req.user?.id!;
 
-  // Changing the prescription language / template is a premium feature
-  // (admin-configurable per plan). Other profile fields stay free.
-  if (
-    doctorUpdateData.prescriptionLanguage !== undefined ||
-    doctorUpdateData.prescriptionTemplate !== undefined
-  ) {
-    const workspaceId = (req.user as any)?.activeWorkspaceId as
-      | string
-      | undefined;
-    if (workspaceId) {
-      await FeatureServices.checkFeatureAccess({
-        featureKey: "prescription_language",
-        userId,
-        workspaceId,
-        trackUsage: false,
-        incrementBy: 0,
-      });
-    }
+  // Two INDEPENDENT premium features. They used to share one check, which meant
+  // holding either entitlement unlocked the other. Other profile fields stay
+  // free.
+  const workspaceId = (req.user as any)?.activeWorkspaceId as
+    | string
+    | undefined;
+
+  if (workspaceId && doctorUpdateData.prescriptionLanguage !== undefined) {
+    await FeatureServices.checkFeatureAccess({
+      featureKey: "prescription_language",
+      userId,
+      workspaceId,
+      trackUsage: false,
+      incrementBy: 0,
+    });
+  }
+
+  if (workspaceId && doctorUpdateData.prescriptionTemplate !== undefined) {
+    await FeatureServices.checkFeatureAccess({
+      featureKey: "prescription_design_templates",
+      userId,
+      workspaceId,
+      trackUsage: false,
+      incrementBy: 0,
+    });
   }
 
   const data = await DoctorServices.updateDoctorProfile(

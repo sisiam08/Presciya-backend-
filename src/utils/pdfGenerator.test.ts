@@ -163,12 +163,16 @@ describe("generatePrescriptionHtml — instruction types (Section 13.1)", () => 
 });
 
 describe("generatePrescriptionHtml — content", () => {
-  it("prints patient identifier, serial and generated timestamp", () => {
+  it("prints the patient identifier and serial without the removed footer text", () => {
     const html = generatePrescriptionHtml(baseData({ medicines: [medicine(1)] }));
     expect(html).toContain("P-0001");
     expect(html).toContain("PRS-ABCD-000001");
-    expect(html).toContain("Generated:");
     expect(html).toContain("Test Chamber");
+    // The generated/disclaimer footer and the "Registered Practitioner" label
+    // are intentionally removed from every template.
+    expect(html).not.toContain("Generated:");
+    expect(html).not.toContain("Registered Practitioner");
+    expect(html).not.toContain("digitally generated prescription");
   });
 
   it("only prints BMDC when the doctor is approved", () => {

@@ -738,17 +738,42 @@ const compileHtmlPrescription = async (
     ? prescription.chamber.footerText || activeSettings.footerText || ""
     : activeSettings.footerText || "";
 
-  const watermark = {
+  const configuredWatermark = {
     enabled: Boolean(activeSettings.watermarkEnabled),
     text: activeSettings.watermarkText || "",
     url: activeSettings.watermarkUrl || "",
   };
+
+  // A watermark is a plan-controlled entitlement: a plan that does not include
+  // it must not render one, even if it was configured while the plan did.
+  const watermarkAllowed =
+    configuredWatermark.enabled &&
+    (await FeatureServices.isFeatureAllowed({
+      userId: prescription.doctorUserId,
+      workspaceId: prescription.workspaceId,
+      featureKey: "watermark",
+    }));
+
+  const watermark = watermarkAllowed
+    ? configuredWatermark
+    : { enabled: false, text: "", url: "" };
+
+  // Public QR verification is a plan entitlement too — the QR is only drawn
+  // when the active plan includes it. (The public verification page itself
+  // stays reachable, so prescriptions already printed with a QR keep working;
+  // this gates GENERATION, which is what the entitlement controls.)
+  const qrVerificationAllowed = await FeatureServices.isFeatureAllowed({
+    userId: prescription.doctorUserId,
+    workspaceId: prescription.workspaceId,
+    featureKey: "qr_verification",
+  });
 
   // Structure render data matching IPdfRenderData interface
   const renderData: IPdfRenderData = {
     id: prescription.id,
     serialNumber: prescription.serialNumber || "",
     verificationCode: prescription.verificationCode,
+    qrVerificationAllowed,
     createdAt: prescription.createdAt,
     status: prescription.status,
     language: prescription.language,
@@ -1387,14 +1412,27 @@ const previewTemplateSample = async (
   workspaceId: string,
   template: PrescriptionDesignTemplate,
   language: PrescriptionLanguage,
+  /**
+   * The chamber the preview is being rendered for. When omitted the preview is
+   * the PERSONAL context and must resolve the workspace's personal-prescription
+   * settings — it must NOT silently borrow an unrelated chamber's branding,
+   * which is what made the Settings preview ignore the personal footer/watermark.
+   */
+  chamberId?: string | null,
 ): Promise<string> => {
-  const [user, doctorProfile, chamber] = await Promise.all([
+  const [user, doctorProfile, chamber, workspace] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { name: true } }),
     prisma.doctor.findUnique({ where: { userId } }),
-    prisma.chamber.findFirst({
-      where: { workspaceId },
-      include: { contactNumbers: true },
-      orderBy: { createdAt: "asc" },
+    chamberId
+      ? prisma.chamber.findFirst({
+          where: { id: chamberId, workspaceId },
+          include: { contactNumbers: true },
+        })
+      : Promise.resolve(null),
+    // The personal-prescription settings (footer / watermark) live here.
+    prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { templateConfig: true },
     }),
   ]);
 
@@ -1423,6 +1461,48 @@ const previewTemplateSample = async (
         allergies: "None known",
         chronicDiseases: "None",
       };
+
+  // Resolve the SAME branding the real renderer uses. Without this the Settings
+  // live preview silently ignored the configured footer/watermark, which made
+  // the admin's plan toggle look ineffective — the preview is where the setting
+  // is actually judged. The watermark is gated through the same centralized
+  // entitlement resolution as the real render path (never hardcoded).
+  type BrandingSettings = {
+    footerText?: string;
+    watermarkEnabled?: boolean;
+    watermarkText?: string;
+    watermarkUrl?: string;
+  };
+  const activeSettings: BrandingSettings = (chamber
+    ? chamber.templateConfig
+    : workspace?.templateConfig ?? {}) as BrandingSettings;
+
+  const previewFooterText = chamber
+    ? chamber.footerText || activeSettings.footerText || ""
+    : activeSettings.footerText || "";
+
+  const configuredWatermark = {
+    enabled: Boolean(activeSettings.watermarkEnabled),
+    text: activeSettings.watermarkText || "",
+    url: activeSettings.watermarkUrl || "",
+  };
+  const previewWatermarkAllowed =
+    configuredWatermark.enabled &&
+    (await FeatureServices.isFeatureAllowed({
+      userId,
+      workspaceId,
+      featureKey: "watermark",
+    }));
+  const previewWatermark = previewWatermarkAllowed
+    ? configuredWatermark
+    : { enabled: false, text: "", url: "" };
+
+  // Same entitlement gate as the real render path.
+  const previewQrAllowed = await FeatureServices.isFeatureAllowed({
+    userId,
+    workspaceId,
+    featureKey: "qr_verification",
+  });
 
   const renderData: IPdfRenderData = {
     id: "SAMPLE-PRESCRIPTION",
@@ -1514,6 +1594,9 @@ const previewTemplateSample = async (
       chronicDiseases: sample.chronicDiseases,
       patientIdentifier: "P-000123",
     },
+    footerText: previewFooterText,
+    watermark: previewWatermark,
+    qrVerificationAllowed: previewQrAllowed,
   };
 
   return generatePrescriptionHtml(renderData);

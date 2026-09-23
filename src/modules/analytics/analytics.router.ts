@@ -1,14 +1,21 @@
 import { Router } from "express";
 import { AnalyticsControllers } from "./analytics.controller";
 import { authOnly, authWorkspace } from "../../middleware/auth";
-import { requireFeatureAccess } from "../../middleware/featureAccess";
 import { WorkspaceRole } from "../../../generated/prisma/enums";
 
 const router = Router();
 
-// Expose dashboard metrics with workspace auth check. Analytics is a premium
-// feature, so it is also entitlement-gated (admin decides which plans include
-// it). Pure entitlement check — no usage counting.
+// The DASHBOARD SUMMARY is a core surface, not the premium analytics product.
+//
+// It used to be gated by `requireFeatureAccess("analytics")`. Because the
+// standalone Analytics page was removed, that gate ended up guarding the
+// post-login home screen: any plan without the `analytics` entitlement (the
+// default Free plan, for instance) received a 402 here, and the dashboard
+// silently rendered every KPI as 0 even though the workspace had data.
+//
+// Authorization is unchanged — an authenticated member of the ACTIVE workspace
+// with a staff role can read their own workspace's summary, and the scope is
+// still derived server-side (never from a client-supplied workspace id).
 router.get(
   "/dashboard",
   authOnly(),
@@ -17,10 +24,6 @@ router.get(
     WorkspaceRole.OWNER,
     WorkspaceRole.MANAGER,
   ]) as any,
-  requireFeatureAccess("analytics", {
-    trackUsage: false,
-    incrementBy: 0,
-  }) as any,
   AnalyticsControllers.getDashboardAnalytics,
 );
 
