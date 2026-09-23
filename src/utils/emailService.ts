@@ -10,6 +10,10 @@ const transporter = nodemailer.createTransport({
     user: config.nodemailer.auth.user,
     pass: config.nodemailer.auth.pass,
   },
+  tls: {
+    rejectUnauthorized: false
+  },
+  connectionTimeout: 10000,
 });
 
 interface EmailOptions {

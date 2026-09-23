@@ -89,7 +89,7 @@ const envSchema = z.object({
   ACCESS_TOKEN_COOKIE_MAX_AGE: z.coerce.number().int().positive().optional(),
   REFRESH_TOKEN_COOKIE_MAX_AGE: z.coerce.number().int().positive().optional(),
   COOKIE_SECURE: booleanish.optional(),
-  COOKIE_SAME_SITE: z.enum(["lax", "strict", "none"]).optional(),
+  COOKIE_SAME_SITE: z.enum(["lax", "none"]).optional(),
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_PATH: z.string().default("/"),
 
@@ -114,7 +114,7 @@ const envSchema = z.object({
   CLOUDEINARY_API_KEY: z.string().optional(),
   CLOUDEINARY_API_SECRET: z.string().optional(),
   NODEMAILER_HOST: z.string().optional(),
-  NODEMAILER_PORT: z.coerce.number().int().positive().default(587),
+  NODEMAILER_PORT: z.coerce.number().int().positive().default(465),
   APP_USER: z.string().optional(),
   APP_PASSWORD: z.string().optional(),
 });
@@ -172,7 +172,7 @@ const refreshCookieMaxAge =
 
 const corsOrigins = Array.from(
   new Set(
-    [env.FRONTEND_URL ?? env.APP_URL, ...(env.CORS_ORIGIN?.split(",") ?? [])]
+    [env.APP_URL, ...(env.CORS_ORIGIN?.split(",") ?? [])]
       .map((origin) => origin.trim())
       .filter(Boolean),
   ),
@@ -208,7 +208,7 @@ const config = {
     accessMaxAge: accessCookieMaxAge,
     refreshMaxAge: refreshCookieMaxAge,
     secure: env.COOKIE_SECURE ?? isProduction,
-    sameSite: env.COOKIE_SAME_SITE ?? (isProduction ? "strict" : "lax"),
+    sameSite: env.COOKIE_SAME_SITE ?? (isProduction ? "none" : "lax"),
     domain: env.COOKIE_DOMAIN,
     path: env.COOKIE_PATH,
   },

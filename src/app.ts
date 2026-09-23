@@ -21,8 +21,6 @@ app.use(helmet());
 // "Network Error" and the client cannot read the real status.
 app.use(
   cors({
-    // Explicit allow-list from configuration (FRONTEND_URL / CORS_ORIGIN).
-    // Never "*" — credentialed cookie requests would be rejected by browsers.
     origin: config.cors.origins,
     credentials: true,
   }),
