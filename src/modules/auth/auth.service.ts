@@ -66,13 +66,13 @@ const generateTokens = (user: {
   workspaceRole?: WorkspaceRole;
   activeWorkspaceId?: string;
 }) => {
-  // `jti` guarantees each token is unique even when two logins happen within
-  // the same second (otherwise the refresh token string could collide and the
-  // session insert would fail with a duplicate-key error).
+  
+  
+  
   const accessToken = jwt.sign(
     {
       id: user.userId,
-      // Authoritative role from the user record — never from client state.
+      
       systemRole: user.systemRole,
       workspaceType: user.workspaceType,
       workspaceRole: user.workspaceRole,
@@ -87,10 +87,10 @@ const generateTokens = (user: {
     },
   );
 
-  // The refresh token must carry the workspace context too, otherwise a token
-  // rotation would silently drop `activeWorkspaceId` and every workspace-scoped
-  // route that resolves the workspace from the token would start failing with
-  // "Workspace context required".
+  
+  
+  
+  
   const refreshToken = jwt.sign(
     {
       id: user.userId,
@@ -175,14 +175,14 @@ const signUp = async (
 ) => {
   const { name, email, password, accountType, OTP } = userData;
 
-  // Institution / hospital / clinic accounts are not part of the current public
-  // release. The flag is admin-controlled (FeatureFlag); no hardcoded rule.
+  
+  
   if (accountType === "INSTITUTION") {
     await FeatureServices.assertInstitutionEnabled();
   }
 
-  // One email maps to exactly one User, forever (Section 1.3). Guard against a
-  // race where another request created the account after sendOTP.
+  
+  
   const existingUser = await prisma.user.findUnique({
     where: { email },
     select: { id: true },
@@ -216,7 +216,7 @@ const signUp = async (
     );
   }
 
-  // Check maximum attempts
+  
   if (otpRecord.attempts >= otpRecord.maxAttempts) {
     await prisma.oTP.delete({
       where: { email },
@@ -227,7 +227,7 @@ const signUp = async (
     );
   }
 
-  // Verify OTP
+  
   if (otpRecord.otp !== OTP) {
     await prisma.oTP.update({
       where: { email },
@@ -308,7 +308,7 @@ const signUp = async (
       },
     });
 
-    // Create verification request after workspace/membership exists
+    
     await tx.verificationRequest.create({
       data: {
         userId: user.id,
@@ -325,12 +325,12 @@ const signUp = async (
     return user;
   });
 
-  // Delete OTP record after successful verification
+  
   await prisma.oTP.delete({
     where: { email },
   });
 
-  // Audit: Log user creation (signup)
+  
   await AuditService.logAudit({
     userId: data.id,
     actionType: AuditActionType.CREATE,
@@ -508,15 +508,15 @@ const logIn = async (
     };
   }
 
-  // Filter workspaces with ACTIVE membership status
+  
   const acceptedWorkspaces = workspaces.filter(
     (ws) => ws.status === MembershipStatus.ACTIVE,
   );
 
-  // No active membership yet. An invited user must still be able to sign in so
-  // they can accept their invitation (the invitation email links to the accept
-  // page). The token carries no active workspace; only auth-only endpoints such
-  // as accepting an invitation are reachable until a membership is accepted.
+  
+  
+  
+  
   if (acceptedWorkspaces.length === 0) {
     const hasPendingInvitation = workspaces.some(
       (ws) => ws.status === MembershipStatus.PENDING,
@@ -580,7 +580,7 @@ const logIn = async (
     };
   }
 
-  // If only one workspace is accepted (rest are pending)
+  
   if (acceptedWorkspaces.length === 1) {
     const activeWorkspace = acceptedWorkspaces[0];
 
@@ -592,7 +592,7 @@ const logIn = async (
       activeWorkspaceId: activeWorkspace?.workspace.id!,
     });
 
-    // Store Session
+    
     await prisma.session.create({
       data: {
         userId: user.id,
@@ -603,7 +603,7 @@ const logIn = async (
       },
     });
 
-    // Log Successful Login
+    
     await prisma.loginHistory.create({
       data: {
         userId: user.id,
@@ -613,7 +613,7 @@ const logIn = async (
       },
     });
 
-    // Audit: Log login
+    
     await AuditService.logAudit({
       userId: user.id,
       actionType: AuditActionType.LOGIN,
@@ -648,9 +648,9 @@ const logIn = async (
       refreshToken,
     };
   } else {
-    // Multiple active workspaces: issue an unscoped token so the client can
-    // call /auth/switch-workspace, and require an explicit workspace choice.
-    // The client must never assume workspaces[0] is active (Section 5.3).
+    
+    
+    
     const { accessToken, refreshToken } = generateTokens({
       userId: user.id,
       systemRole: user.systemRole,
@@ -666,7 +666,7 @@ const logIn = async (
       },
     });
 
-    // Log Successful Login
+    
     await prisma.loginHistory.create({
       data: {
         userId: user.id,
@@ -676,7 +676,7 @@ const logIn = async (
       },
     });
 
-    // Audit: Log login
+    
     await AuditService.logAudit({
       userId: user.id,
       actionType: AuditActionType.LOGIN,
@@ -752,7 +752,7 @@ const switchWorkspace = async (
     );
   }
 
-  // Institution workspaces are not usable in the current public release.
+  
   if (workspace.workspace.type === WorkspaceType.INSTITUTION) {
     await FeatureServices.assertInstitutionEnabled();
   }
@@ -798,7 +798,7 @@ const switchWorkspace = async (
     activeWorkspaceId: workspaceId,
   });
 
-  // Store Session
+  
   await prisma.session.create({
     data: {
       userId: user.id,
@@ -809,7 +809,7 @@ const switchWorkspace = async (
     },
   });
 
-  // Log Successful Login
+  
   await prisma.loginHistory.create({
     data: {
       userId: user.id,
@@ -819,7 +819,7 @@ const switchWorkspace = async (
     },
   });
 
-  // Audit: Log workspace switch
+  
   await AuditService.logAudit({
     userId: user.id,
     workspaceId,
@@ -860,8 +860,8 @@ const refreshToken = async (
 ) => {
   let decoded: any;
   try {
-    // Refresh tokens are verified with the refresh secret only, so an access
-    // token can never be replayed as a refresh token (and vice versa).
+    
+    
     decoded = jwt.verify(token, config.refreshToken.secret, {
       issuer: config.jwt.issuer,
       audience: config.jwt.audience,
@@ -897,7 +897,7 @@ const refreshToken = async (
     activeWorkspaceId: decoded.activeWorkspaceId,
   });
 
-  // Rotate Session Token
+  
   await prisma.session.update({
     where: { id: session.id },
     data: {
@@ -922,7 +922,7 @@ const logOut = async (token: string, userId?: string) => {
       data: { isActive: false },
     });
 
-    // Audit: Log logout
+    
     await AuditService.logAudit({
       userId: session.userId,
       actionType: AuditActionType.LOGOUT,
@@ -940,7 +940,7 @@ const logoutAll = async (userId: string) => {
     data: { isActive: false },
   });
 
-  // Audit: Log logout all sessions
+  
   await AuditService.logAudit({
     userId,
     actionType: AuditActionType.LOGOUT,
@@ -961,9 +961,9 @@ const forgetPassword = async (email: string) => {
     throw createAppError("User not found with this email", Status.NOT_FOUND);
   }
 
-  // Short-lived, single-purpose reset token. It rides on the access-token
-  // secret (same identity-JWT family) with its own independently configured
-  // lifetime.
+  
+  
+  
   const resetToken = jwt.sign(
     { id: user.id, purpose: "reset_password" },
     config.accessToken.secret,
@@ -974,10 +974,10 @@ const forgetPassword = async (email: string) => {
     },
   );
 
-  // Generate reset URL with token
+  
   const resetUrl = `${config.appUrl}/reset-password?token=${resetToken}`;
 
-  // Send password reset email
+  
   try {
     await emailService.sendPasswordResetEmail(
       user.email,
@@ -1039,7 +1039,7 @@ const resetPassword = async (token: string, newPassword: string) => {
     });
   });
 
-  // Audit: Log password change
+  
   await AuditService.logAudit({
     userId: user.id,
     actionType: AuditActionType.PASSWORD_CHANGE,
@@ -1131,11 +1131,7 @@ const getCurrentUser = async (userId: string) => {
   };
 };
 
-/**
- * Updates the caller's own account information (name / User.phone). Only the
- * provided fields change. An empty phone clears it; otherwise the canonical
- * Bangladesh form is stored.
- */
+
 const updateMe = async (
   userId: string,
   data: { name?: string; phone?: string },

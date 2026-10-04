@@ -4,14 +4,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma";
 import app from "../app";
 
-/**
- * End-to-end integration tests against a real database. These are opt-in so
- * the default unit test run stays fast and DB-free:
- *
- *   RUN_INTEGRATION_TESTS=1 npm test
- *
- * The suite creates its own data and cleans it up afterwards.
- */
+
 const enabled = process.env.RUN_INTEGRATION_TESTS === "1";
 const suite = enabled ? describe : describe.skip;
 

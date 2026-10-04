@@ -7,10 +7,7 @@ import { Status } from "../../errors/httpStatus";
 import { VerificationType, SystemRole } from "../../../generated/prisma/enums";
 import { AuthenticatedRequest } from "../../middleware/auth";
 
-/**
- * Submit verification request for doctor or institution
- * POST /api/verification/submit
- */
+
 export const submitVerificationRequest = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { type, submittedData, workspaceId: bodyWorkspaceId } = req.body;
@@ -20,7 +17,7 @@ export const submitVerificationRequest = catchAsync(
       throw createAppError("User not authenticated", Status.UNAUTHORIZED);
     }
 
-    // Accept the legacy "DOCTOR" label as an alias for PERSONAL.
+    
     const normalizedType =
       type === "DOCTOR" ? VerificationType.PERSONAL : type;
 
@@ -34,7 +31,7 @@ export const submitVerificationRequest = catchAsync(
       );
     }
 
-    // Default the workspace to the caller's active workspace when omitted.
+    
     const workspaceId = bodyWorkspaceId || req.user?.activeWorkspaceId;
 
     if (!workspaceId) {
@@ -61,10 +58,7 @@ export const submitVerificationRequest = catchAsync(
   },
 );
 
-/**
- * Upload verification evidence to private storage (owner only)
- * POST /api/verification/documents
- */
+
 export const uploadDocuments = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const files = (req.files as Express.Multer.File[]) || [];
@@ -80,10 +74,7 @@ export const uploadDocuments = catchAsync(
   },
 );
 
-/**
- * Get pending verification requests (admin only)
- * GET /api/verification/pending
- */
+
 export const getPendingRequests = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id;
@@ -115,10 +106,7 @@ export const getPendingRequests = catchAsync(
   },
 );
 
-/**
- * Get verification request details
- * GET /api/verification/:id
- */
+
 export const getRequestDetails = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id;
@@ -134,7 +122,7 @@ export const getRequestDetails = catchAsync(
 
     const request = await VerificationServices.getRequestDetails(id);
 
-    // Allow viewing own request or admin viewing any request
+    
     if (
       request.userId !== userId &&
       req.user?.systemRole !== SystemRole.SUPER_ADMIN
@@ -154,10 +142,7 @@ export const getRequestDetails = catchAsync(
   },
 );
 
-/**
- * Move verification request to under review (admin only)
- * POST /api/verification/:id/under-review
- */
+
 export const markUnderReview = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id;
@@ -190,10 +175,7 @@ export const markUnderReview = catchAsync(
   },
 );
 
-/**
- * Approve verification request (admin only)
- * POST /api/verification/:id/approve
- */
+
 export const approveRequest = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id;
@@ -226,10 +208,7 @@ export const approveRequest = catchAsync(
   },
 );
 
-/**
- * Reject verification request (admin only)
- * POST /api/verification/:id/reject
- */
+
 export const rejectRequest = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id;

@@ -121,9 +121,9 @@ const updateDoctorProfile = catchAsync(async (req: Request, res: Response) => {
 
   const userId = req.user?.id!;
 
-  // Two INDEPENDENT premium features. They used to share one check, which meant
-  // holding either entitlement unlocked the other. Other profile fields stay
-  // free.
+  
+  
+  
   const workspaceId = (req.user as any)?.activeWorkspaceId as
     | string
     | undefined;

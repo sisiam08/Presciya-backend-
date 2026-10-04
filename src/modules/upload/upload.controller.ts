@@ -7,15 +7,7 @@ import { createAppError } from "../../errors/appError";
 import { uploadFileToCloudinary } from "../../config/cloudinary.config";
 import { AuthenticatedRequest } from "../../middleware/auth";
 
-/**
- * Generic image upload for configuration images (logos, watermarks, signatures).
- *
- * It deliberately reuses the EXISTING Cloudinary infrastructure
- * (`uploadFileToCloudinary`) rather than introducing a second storage system:
- * the file is optimised with sharp, stored in Cloudinary, and only the resulting
- * URL/public id is returned. The caller then saves that URL into whatever
- * configuration owns it — nothing is linked here.
- */
+
 const uploadImage = catchAsync(async (req: AuthenticatedRequest, res: Response) => {
   const file = req.file;
 

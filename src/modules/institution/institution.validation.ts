@@ -44,8 +44,8 @@ const createDepartmentSchema = z.object({
 const assignDoctorSchema = z.object({
   body: z
     .object({
-      // Either assign an existing doctor record by id, or invite by email
-      // (existing or new user; never creates a duplicate User).
+      
+      
       doctorId: z.string().uuid("Invalid Doctor ID").optional(),
       email: z.string().email("Invalid email address").optional(),
       name: z.string().min(2).optional(),

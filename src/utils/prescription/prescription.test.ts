@@ -44,8 +44,8 @@ const baseData = (overrides: Partial<IPdfRenderData> = {}): IPdfRenderData => ({
   ...overrides,
 });
 
-// A raw PrescriptionMedicine-shaped row (snapshot* columns) as returned by
-// Prisma — the renderer must still show the medicine name.
+
+
 const snapshotMedicine = (i: number) => ({
   snapshotBrandName: `Napa ${i}`,
   snapshotGeneric: "Paracetamol",
@@ -100,14 +100,14 @@ describe("prescription rendering — language", () => {
 
   it("Bangla localises predefined VALUES but keeps the field labels in English", () => {
     const html = generatePrescriptionHtml(banglaData());
-    // Predefined value localised (meal timing).
-    expect(html).toContain("খাবার পরে"); // After Meal
+    
+    expect(html).toContain("খাবার পরে"); 
     expect(html).not.toContain("After Meal");
-    // Field labels stay English in both languages (product decision).
+    
     expect(html).toContain("Instructions");
     expect(html).toContain("Advice");
     expect(html).toContain("Next Visit");
-    // The Bangla label forms must NOT appear.
+    
     expect(html).not.toContain("নির্দেশনা");
     expect(html).not.toContain("পরামর্শ");
     expect(html).not.toContain("পরবর্তী সাক্ষাৎ");
@@ -121,7 +121,7 @@ describe("prescription rendering — language", () => {
       medicines: [snapshotMedicine(1)],
     });
     const html = generatePrescriptionHtml(data);
-    // Doctor text is rendered exactly as entered, in both languages.
+    
     expect(html).toContain("Drink plenty of water and take complete rest.");
     expect(html).toContain("Mild throat congestion");
   });
@@ -155,9 +155,9 @@ describe("prescription rendering — language", () => {
 
   it("Bangla does NOT translate the patient name or the prescription date", () => {
     const html = generatePrescriptionHtml(banglaData());
-    // Patient name stays exactly as entered (a proper name).
+    
     expect(html).toContain("Rahim");
-    // The prescription date keeps the default format (createdAt = Jan 2026).
+    
     expect(html).toContain("January");
   });
 
@@ -182,8 +182,8 @@ describe("prescription rendering — language", () => {
         ],
       }),
     );
-    expect(html).toContain("৭ দিন"); // 7 days
-    expect(html).toContain("৪ সপ্তাহ"); // 4 weeks
+    expect(html).toContain("৭ দিন"); 
+    expect(html).toContain("৪ সপ্তাহ"); 
     expect(html).not.toContain("7 days");
   });
 
@@ -198,7 +198,7 @@ describe("prescription rendering — language", () => {
     const html = generatePrescriptionHtml(
       baseData({ language: "BANGLA", nextVisitDate: new Date("2026-01-08T10:00:00Z") }),
     );
-    // 8 January 2026 -> Bangla month + Bangla digits
+    
     expect(html).toContain("জানুয়ারি");
     expect(html).toContain("২০২৬");
   });

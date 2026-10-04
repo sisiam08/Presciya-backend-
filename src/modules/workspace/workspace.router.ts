@@ -13,10 +13,10 @@ import { requirePermission as requireWorkspacePermission } from "../../middlewar
 
 const router = Router();
 
-// Get current user's workspaces
+
 router.get("/", authOnly(), workspaceController.getUserWorkspaces);
 
-// Create a new workspace
+
 router.post(
   "/",
   authOnly(),
@@ -24,32 +24,32 @@ router.post(
   workspaceController.createWorkspace,
 );
 
-// Get pending invitations for current user
+
 router.get(
   "/invitations/pending",
   authOnly(),
   workspaceController.getPendingInvitations,
 );
 
-// Verify an invitation token (public) — declared after /invitations/pending so
-// that literal path is never captured by :token.
+
+
 router.get("/invitations/:token", workspaceController.verifyInvitation);
 
-// Accept invitation
+
 router.post(
   "/invitations/accept",
   authOnly(),
   workspaceController.acceptInvitation,
 );
 
-// Reject invitation
+
 router.post(
   "/invitations/reject",
   authOnly(),
   workspaceController.rejectInvitation,
 );
 
-// Update workspace (owner only)
+
 router.patch(
   "/:workspaceId",
   authWorkspace([WorkspaceRole.OWNER]) as any,
@@ -57,28 +57,28 @@ router.patch(
   workspaceController.updateWorkspace,
 );
 
-// Delete workspace (owner only)
+
 router.delete(
   "/:workspaceId",
   authWorkspace([WorkspaceRole.OWNER]) as any,
   workspaceController.deleteWorkspace,
 );
 
-// Get workspace detail
+
 router.get(
   "/:workspaceId",
   authWorkspace([]) as any,
   workspaceController.getWorkspace,
 );
 
-// Get workspace members
+
 router.get(
   "/:workspaceId/members",
   authWorkspace([]) as any,
   workspaceController.getWorkspaceMembers,
 );
 
-// Invite user to workspace
+
 router.post(
   "/:workspaceId/members/invite",
   authWorkspace([WorkspaceRole.OWNER]) as any,
@@ -87,7 +87,7 @@ router.post(
   workspaceController.inviteUser,
 );
 
-// Update member role
+
 router.patch(
   "/:workspaceId/members/:memberId",
   authWorkspace([WorkspaceRole.OWNER]) as any,
@@ -96,21 +96,21 @@ router.patch(
   workspaceController.updateMemberRole,
 );
 
-// Suspend membership (owner only)
+
 router.patch(
   "/:workspaceId/members/:memberId/suspend",
   authWorkspace([WorkspaceRole.OWNER]) as any,
   workspaceController.suspendMember,
 );
 
-// Restore membership (owner only)
+
 router.patch(
   "/:workspaceId/members/:memberId/restore",
   authWorkspace([WorkspaceRole.OWNER]) as any,
   workspaceController.restoreMember,
 );
 
-// Remove member from workspace
+
 router.delete(
   "/:workspaceId/members/:memberId",
   authWorkspace([WorkspaceRole.OWNER]) as any,
@@ -118,7 +118,7 @@ router.delete(
   workspaceController.removeMember,
 );
 
-// Get sent invitations
+
 router.get(
   "/:workspaceId/invitations",
   authWorkspace([WorkspaceRole.OWNER]) as any,
@@ -126,7 +126,7 @@ router.get(
   workspaceController.getWorkspaceInvitations,
 );
 
-// Cancel invitation
+
 router.delete(
   "/:workspaceId/invitations/:invitationId",
   authWorkspace([WorkspaceRole.OWNER]) as any,

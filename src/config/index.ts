@@ -5,11 +5,7 @@ import type { SignOptions } from "jsonwebtoken";
 
 dotenv.config({ path: path.join(process.cwd(), ".env") });
 
-/**
- * Central, validated configuration. Every environment-dependent value used by
- * authentication lives here — no `process.env.X` lookups are scattered through
- * the codebase and no security-sensitive value is hardcoded in source.
- */
+
 
 type ExpiresIn = NonNullable<SignOptions["expiresIn"]>;
 
@@ -22,13 +18,9 @@ const DURATION_UNITS: Record<string, number> = {
   w: 7 * 24 * 60 * 60 * 1000,
 };
 
-/**
- * Convert a duration ("15m", "7d", "3600", "45s") to milliseconds. Keeps the
- * cookie max-age and the server-side session expiry in lockstep with the token
- * lifetime instead of duplicating the number in several places.
- */
+
 export const durationToMs = (value: string | number): number => {
-  if (typeof value === "number") return value * 1000; // jsonwebtoken treats bare numbers as seconds
+  if (typeof value === "number") return value * 1000; 
   const match = /^\s*(\d+(?:\.\d+)?)\s*(ms|s|m|h|d|w)?\s*$/i.exec(value);
   if (!match) {
     throw new Error(`Invalid duration "${value}" (expected e.g. "15m", "7d", "3600")`);
@@ -39,12 +31,12 @@ export const durationToMs = (value: string | number): number => {
   return Math.round(amount * multiplier);
 };
 
-/** "1h"/"7d"/seconds — accepted by jsonwebtoken as-is. */
+
 const durationSchema = z
   .union([z.string().regex(/^\s*\d+(?:\.\d+)?\s*(ms|s|m|h|d|w)?\s*$/i, "Invalid duration"), z.coerce.number().positive()])
   .default("1h");
 
-/** Env booleans ("true"/"1"/"yes"/"on") — `z.coerce.boolean()` would make "false" truthy. */
+
 const booleanish = z
   .union([z.boolean(), z.string()])
   .transform((value) =>
@@ -56,36 +48,36 @@ const booleanish = z
 const isProduction = process.env.NODE_ENV === "production";
 
 const envSchema = z.object({
-  // ── Application ──────────────────────────────────────────────────────────
+  
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(5000),
   APP_URL: z.string().url().default("http://localhost:3000"),
   FRONTEND_URL: z.string().url().optional(),
-  /** Extra allowed origins, comma separated (e.g. staging frontends). */
+  
   CORS_ORIGIN: z.string().optional(),
 
-  // ── Database ─────────────────────────────────────────────────────────────
+  
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
 
-  // ── Access / refresh tokens (independent secrets + lifetimes) ────────────
+  
   ACCESS_TOKEN_SECRET: z.string().min(32, "ACCESS_TOKEN_SECRET must be at least 32 characters").optional(),
   ACCESS_TOKEN_EXPIRES_IN: durationSchema,
   REFRESH_TOKEN_SECRET: z.string().min(32, "REFRESH_TOKEN_SECRET must be at least 32 characters").optional(),
   REFRESH_TOKEN_EXPIRES_IN: durationSchema.default("7d"),
 
-  // Legacy single-secret names are still honoured as a development fallback so
-  // existing environments keep working, but they are never used in production.
+  
+  
   JWT_SECRET: z.string().optional(),
   JWT_EXPIRES_IN: durationSchema.optional(),
 
-  // ── JWT claims validation ────────────────────────────────────────────────
+  
   JWT_ISSUER: z.string().default("presciya-api"),
   JWT_AUDIENCE: z.string().default("presciya-web"),
 
-  // ── Authentication cookies ───────────────────────────────────────────────
+  
   ACCESS_TOKEN_COOKIE_NAME: z.string().default("accessToken"),
   REFRESH_TOKEN_COOKIE_NAME: z.string().default("refreshToken"),
-  /** Optional overrides — default to the matching token lifetime. */
+  
   ACCESS_TOKEN_COOKIE_MAX_AGE: z.coerce.number().int().positive().optional(),
   REFRESH_TOKEN_COOKIE_MAX_AGE: z.coerce.number().int().positive().optional(),
   COOKIE_SECURE: booleanish.optional(),
@@ -93,23 +85,23 @@ const envSchema = z.object({
   COOKIE_DOMAIN: z.string().optional(),
   COOKIE_PATH: z.string().default("/"),
 
-  // ── Sessions / one-time codes ────────────────────────────────────────────
-  /** Defaults to the refresh-token lifetime (a session cannot outlive it). */
+  
+  
   SESSION_EXPIRES_IN: durationSchema.optional(),
   OTP_EXPIRES_IN: z.string().default("15m"),
   PASSWORD_RESET_EXPIRES_IN: z.string().default("15m"),
   INVITATION_EXPIRY_DAYS: z.coerce.number().int().positive().default(7),
 
-  // ── Password hashing ─────────────────────────────────────────────────────
+  
   BCRYPT_SALT_ROUND: z.coerce.number().int().min(4).max(15).optional(),
 
-  // ── Rate limiting ────────────────────────────────────────────────────────
+  
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
   GENERAL_RATE_LIMIT: z.coerce.number().int().positive().default(300),
   AUTH_RATE_LIMIT: z.coerce.number().int().positive().default(10),
   PUBLIC_VERIFY_RATE_LIMIT: z.coerce.number().int().positive().default(30),
 
-  // ── External services ────────────────────────────────────────────────────
+  
   CLOUDEINARY_CLOUD_NAME: z.string().optional(),
   CLOUDEINARY_API_KEY: z.string().optional(),
   CLOUDEINARY_API_SECRET: z.string().optional(),
@@ -125,7 +117,7 @@ if (!parsed.success) {
   const problems = parsed.error.issues
     .map((issue) => `  - ${issue.path.join(".") || "(root)"}: ${issue.message}`)
     .join("\n");
-  // Fail fast: a misconfigured server must not start half-working.
+  
   throw new Error(`Invalid environment configuration:\n${problems}`);
 }
 
@@ -164,7 +156,7 @@ if (!isProduction) {
 const accessExpiresIn = env.ACCESS_TOKEN_EXPIRES_IN as ExpiresIn;
 const refreshExpiresIn = env.REFRESH_TOKEN_EXPIRES_IN as ExpiresIn;
 
-// Cookie lifetimes default to the token lifetimes so they can never drift.
+
 const accessCookieMaxAge =
   env.ACCESS_TOKEN_COOKIE_MAX_AGE ?? durationToMs(env.ACCESS_TOKEN_EXPIRES_IN);
 const refreshCookieMaxAge =
@@ -225,7 +217,7 @@ const config = {
   },
 
   bcrypt: {
-    // Never lower than 10 outside tests; production defaults a notch higher.
+    
     bcryptSaltRound: env.BCRYPT_SALT_ROUND ?? (isProduction ? 12 : 10),
   },
 
@@ -241,7 +233,7 @@ const config = {
   },
 
   regex: {
-    // Phone rules live in src/utils/phone.ts — the single source of truth.
+    
     passwordRegex:
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
   },

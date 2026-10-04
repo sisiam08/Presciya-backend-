@@ -11,16 +11,16 @@ import { WorkspaceRole } from "../../../generated/prisma/enums";
 
 const router = Router();
 
-// Institution management is not part of the current public release. The gate
-// reads the admin-controlled global flag, so it can be switched back on later
-// without touching this router. `GET /profile` stays open because the shared
-// branding settings tab reads it for every workspace type.
+
+
+
+
 const INSTITUTION_GATE = requireInstitutionEnabled as any;
 
-// Institution management is workspace-scoped. Reads require any active member;
-// mutations require the workspace OWNER or ADMIN. Without this, any active
-// member (e.g. a DOCTOR) of the institution workspace could edit the
-// institution profile/branding or reassign doctors (Section 6.3).
+
+
+
+
 const MEMBER = authWorkspace([
   WorkspaceRole.OWNER,
   WorkspaceRole.ADMIN,
@@ -53,7 +53,7 @@ router.patch(
 
 router.patch(
   "/branding",
-  // Custom branding is a premium, admin-configurable feature.
+  
   requireFeatureAccess("custom_branding", {
     trackUsage: false,
     incrementBy: 0,

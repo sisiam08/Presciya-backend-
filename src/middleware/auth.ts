@@ -15,7 +15,7 @@ import {
   AuthenticatedRequest,
 } from "../interface/auth.type";
 
-// Re-export types for backward compatibility with imports from middleware/auth
+
 export type {
   ITokenPayload,
   AuthenticatedRequest,
@@ -25,14 +25,9 @@ import { FeatureServices } from "../modules/feature/feature.service";
 
 export type OwnershipResource = "prescription" | "patient" | "chamber";
 
-// Token payload and AuthenticatedRequest types are defined in src/interface/auth.type.ts
 
-/**
- * Authenticate user and verify role + ownership
- *
- * USAGE:
- * router.put('/prescriptions/:id', auth([DOCTOR], { resource: 'prescription' }), handler)
- */
+
+
 export const auth = (
   allowedRoles: SystemRole[] = [],
   checkOwnership?: {
@@ -42,7 +37,7 @@ export const auth = (
 ) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      // STEP 1: AUTHENTICATION - Verify JWT token
+      
       const token = req.cookies.accessToken;
 
       if (!token) {
@@ -57,8 +52,8 @@ export const auth = (
     }) as IAuthorizedUser;
       } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
-      // Explicit code so clients can distinguish "expired, refresh me" from
-      // "invalid, do not trust" without parsing the message.
+      
+      
       throw createAppError(
         "Token has expired, please log in again",
         Status.UNAUTHORIZED,
@@ -72,7 +67,7 @@ export const auth = (
         throw error;
       }
 
-      // Verify the user still exists and is active
+      
       const dbUser = await prisma.user.findUnique({
         where: { id: user.id },
         select: { id: true, isActive: true },
@@ -86,7 +81,7 @@ export const auth = (
 
       req.user = user;
 
-      // STEP 2: AUTHORIZATION - Verify system role
+      
       if (
         allowedRoles.length &&
         !allowedRoles.includes(user.systemRole as SystemRole)
@@ -97,13 +92,13 @@ export const auth = (
         );
       }
 
-      // STEP 3: OWNERSHIP CHECK (if applicable)
-      // Skip for SUPER_ADMIN system role - they have access to everything
+      
+      
       if (checkOwnership && user.systemRole !== SystemRole.SUPER_ADMIN) {
         let resourceId =
           req.params.id || req.params[checkOwnership.paramKey || "id"];
 
-        // Handle case where resourceId might be an array (cast to string)
+        
         if (Array.isArray(resourceId)) {
           resourceId = resourceId[0];
         }
@@ -115,7 +110,7 @@ export const auth = (
           );
         }
 
-        // Verify ownership based on resource type
+        
         if (checkOwnership.resource === "prescription") {
           const prescription = await prisma.prescription.findUnique({
             where: { id: resourceId },
@@ -186,7 +181,7 @@ export const auth = (
             throw createAppError("Chamber not found", Status.NOT_FOUND);
           }
 
-          // Verify the user is a member of the chamber's workspace
+          
           const membership = await prisma.membership.findUnique({
             where: {
               userId_workspaceId: {
@@ -212,11 +207,7 @@ export const auth = (
   };
 };
 
-/**
- * Authenticate only (no role/ownership check)
- *
- * USAGE: router.get('/profile', authOnly(), handler)
- */
+
 export const authOnly = () => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -234,8 +225,8 @@ export const authOnly = () => {
     }) as IAuthorizedUser;
       } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
-      // Explicit code so clients can distinguish "expired, refresh me" from
-      // "invalid, do not trust" without parsing the message.
+      
+      
       throw createAppError(
         "Token has expired, please log in again",
         Status.UNAUTHORIZED,
@@ -249,7 +240,7 @@ export const authOnly = () => {
         throw error;
       }
 
-      // Verify the user still exists and is active
+      
       const dbUser = await prisma.user.findUnique({
         where: { id: user.id },
         select: { id: true, isActive: true },
@@ -269,23 +260,12 @@ export const authOnly = () => {
   };
 };
 
-/**
- * Authenticate + verify role only (no ownership check)
- *
- * USAGE: router.get('/admin/stats', authRole([SystemRole.SUPER_ADMIN]), handler)
- */
+
 export const authRole = (allowedRoles: SystemRole[]) => {
   return auth(allowedRoles);
 };
 
-/**
- * Workspace-aware authentication with role validation
- * Validates both user authentication and workspace membership
- *
- * USAGE:
- * router.post('/workspace/:workspaceId/prescriptions',
- *   authWorkspace([WorkspaceRole.DOCTOR]), handler)
- */
+
 export const authWorkspace = (
   allowedRoles?: WorkspaceRole[],
   checkOwnership?: {
@@ -299,7 +279,7 @@ export const authWorkspace = (
     next: NextFunction,
   ) => {
     try {
-      // Step 1: Verify JWT
+      
       const token = req.cookies.accessToken;
 
       if (!token) {
@@ -314,8 +294,8 @@ export const authWorkspace = (
     }) as ITokenPayload;
       } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
-      // Explicit code so clients can distinguish "expired, refresh me" from
-      // "invalid, do not trust" without parsing the message.
+      
+      
       throw createAppError(
         "Token has expired, please log in again",
         Status.UNAUTHORIZED,
@@ -329,7 +309,7 @@ export const authWorkspace = (
         throw error;
       }
 
-      // Verify the user still exists and is active
+      
       const dbUser = await prisma.user.findUnique({
         where: { id: user.id },
         select: { id: true, isActive: true },
@@ -344,10 +324,10 @@ export const authWorkspace = (
       req.user = user;
       req.userId = user.id;
 
-      // Step 2: Get activeWorkspaceId from params or JWT
+      
       let workspaceId: string | undefined = user.activeWorkspaceId;
 
-      // Check for workspaceId in params with type safety
+      
       if (req.params.workspaceId) {
         const paramWorkspaceId = req.params.workspaceId;
         if (Array.isArray(paramWorkspaceId)) {
@@ -357,9 +337,9 @@ export const authWorkspace = (
         }
       }
 
-      // Fall back to the workspace the client declares via header. This is only
-      // a selector — membership is still re-validated below, so a forged value
-      // cannot grant access to a workspace the caller does not belong to.
+      
+      
+      
       if (!workspaceId) {
         const headerWorkspaceId = req.headers["x-workspace-id"];
         if (typeof headerWorkspaceId === "string" && headerWorkspaceId) {
@@ -374,7 +354,7 @@ export const authWorkspace = (
         );
       }
 
-      // Step 3: Verify membership
+      
       const membership = await prisma.membership.findUnique({
         where: {
           userId_workspaceId: {
@@ -385,10 +365,10 @@ export const authWorkspace = (
         include: { workspace: { select: { type: true } } },
       });
 
-      // Institution workspaces are not usable in the current public release, so
-      // workspace-scoped operations are rejected here as well. This closes the
-      // "call the API directly and skip the UI" path. The state is
-      // admin-controlled (FeatureFlag) — not hardcoded.
+      
+      
+      
+      
       if (membership?.workspace?.type === WorkspaceType.INSTITUTION) {
         await FeatureServices.assertInstitutionEnabled();
       }
@@ -402,8 +382,8 @@ export const authWorkspace = (
         );
       }
 
-      // Membership status is authoritative: only ACTIVE members may act.
-      // PENDING/SUSPENDED/INACTIVE memberships are rejected (Section 3.3).
+      
+      
       if (membership.status !== MembershipStatus.ACTIVE) {
         throw createAppError(
           `Your membership for this workspace is ${membership.status}. Access denied.`,
@@ -416,7 +396,7 @@ export const authWorkspace = (
       req.workspaceId = workspaceId;
       req.workspaceRole = membership.role as WorkspaceRole;
 
-      // Step 4: Verify role (if required)
+      
       if (allowedRoles && allowedRoles.length > 0) {
         if (!allowedRoles.includes(membership.role as WorkspaceRole)) {
           throw createAppError(
@@ -426,7 +406,7 @@ export const authWorkspace = (
         }
       }
 
-      // Step 5: Ownership check (if applicable)
+      
       if (checkOwnership && membership.role !== WorkspaceRole.OWNER) {
         let resourceId =
           req.params.id || req.params[checkOwnership.paramKey || "id"];
@@ -442,7 +422,7 @@ export const authWorkspace = (
           );
         }
 
-        // Verify ownership based on resource type
+        
         if (checkOwnership.resource === "prescription") {
           const prescription = await prisma.prescription.findUnique({
             where: { id: resourceId },

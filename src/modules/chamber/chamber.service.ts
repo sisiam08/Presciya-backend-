@@ -18,12 +18,7 @@ import {
   hasWatermarkConfig,
 } from "../../utils/branding";
 
-/**
- * Prescription branding is plan-controlled: the footer/logo belong to
- * `custom_branding`, the watermark to `watermark`. Each entitlement is only
- * enforced when the payload actually writes that part, so creating or updating
- * a chamber never fails with a late, generic entitlement error.
- */
+
 const assertChamberBrandingAccess = async (
   userId: string,
   workspaceId: string,
@@ -67,13 +62,13 @@ const createChamber = async (
   },
   activeWorkspaceId?: string,
 ) => {
-  // Check if user is verified to perform this action
+  
   await checkUserVerification(userId);
 
   const { phones, ...chamberData } = data;
 
-  // Resolve workspaceId: use the active workspace from the switcher first,
-  // otherwise fall back to owned workspace or first membership.
+  
+  
   let workspaceId: string | null = activeWorkspaceId ?? null;
   if (!workspaceId) {
     const ownedWorkspace = await prisma.workspace.findFirst({
@@ -94,11 +89,11 @@ const createChamber = async (
     throw createAppError("Workspace not found for user", Status.NOT_FOUND);
   }
 
-  // Enforce the plan's chamber limit (Free plan = 1 chamber).
+  
   await SubscriptionServices.assertChamberLimit(userId, workspaceId);
 
-  // Enforce prescription-branding entitlements on create too, so the create and
-  // update paths can never disagree.
+  
+  
   await assertChamberBrandingAccess(userId, workspaceId, chamberData);
 
   return await prisma.$transaction(async (tx) => {
@@ -123,7 +118,7 @@ const createChamber = async (
     if (phones && phones.length > 0) {
       const contactNumbers = phones.map((phone, index) => ({
         chamberId: chamber.id,
-        // Canonical domestic form (+8801712345678 -> 01712345678).
+        
         phone: normalizeBangladeshPhone(phone),
         label: ContactLabel.RECEPTION,
         isPrimary: index === 0,
@@ -167,8 +162,8 @@ const getChamberById = async (id: string, workspaceId: string) => {
 };
 
 const getMyChambers = async (userId: string, workspaceId: string) => {
-  // Chambers are scoped to the active workspace (Section 6.4). `userId` is kept
-  // for signature compatibility.
+  
+  
   void userId;
 
   return await prisma.chamber.findMany({
@@ -183,13 +178,13 @@ const updateChamber = async (
   workspaceId: string,
   data: any,
 ) => {
-  // Check if user is verified to perform this action
+  
   await checkUserVerification(userId);
 
   const { phones, ...chamberData } = data;
 
-  // Chamber prescription customization (footer / watermark / logo settings) is
-  // premium and admin-configurable — enforced here, not just in the UI.
+  
+  
   await assertChamberBrandingAccess(userId, workspaceId, chamberData);
 
   const chamber = await prisma.chamber.findFirst({
@@ -200,10 +195,10 @@ const updateChamber = async (
     throw createAppError("Chamber not found", Status.NOT_FOUND);
   }
 
-  // Map API field names to the Chamber columns. Passing the request body
-  // straight to Prisma made every edit that carried `chamberName` /
-  // `chamberAddress` / `chamberSlogan` fail with a Prisma validation error.
-  // Both the canonical API names and the aliases the UI sends are accepted.
+  
+  
+  
+  
   const updateData: Record<string, any> = {};
   const name = chamberData.chamberName ?? chamberData.name;
   const address = chamberData.chamberAddress ?? chamberData.address;
@@ -227,7 +222,7 @@ const updateChamber = async (
     });
 
     if (phones) {
-      // Clear old phone records for this chamber
+      
       await tx.contactNumber.deleteMany({
         where: { chamberId: id },
       });
@@ -267,7 +262,7 @@ const deleteChamber = async (
   userId: string,
   workspaceId: string,
 ) => {
-  // Check if user is verified to perform this action
+  
   await checkUserVerification(userId);
 
   const chamber = await prisma.chamber.findFirst({
@@ -278,7 +273,7 @@ const deleteChamber = async (
     throw createAppError("Chamber not found", Status.NOT_FOUND);
   }
 
-  // Soft delete (mark inactive)
+  
   const deleted = await prisma.chamber.update({
     where: { id },
     data: {
@@ -358,7 +353,7 @@ const createAppointment = async (
     throw createAppError("Invalid appointment date", Status.BAD_REQUEST);
   }
 
-  // BOLA/IDOR: the chamber and patient must belong to the active workspace.
+  
   const chamber = await prisma.chamber.findFirst({
     where: { id: chamberId, workspaceId },
   });
@@ -375,7 +370,7 @@ const createAppointment = async (
     throw createAppError("Patient not found in workspace", Status.NOT_FOUND);
   }
 
-  // Chamber schedules store full weekday names (e.g. "SATURDAY")
+  
   const DAY_MAP: Record<string, string> = {
     SUN: "SUNDAY",
     MON: "MONDAY",
@@ -390,14 +385,14 @@ const createAppointment = async (
     .toUpperCase();
   const dayOfWeek = DAY_MAP[shortDay] ?? shortDay;
 
-  // Retry on unique-serial collisions so concurrent bookings never double-book
-  // (Section 16.2).
+  
+  
   let appointment: any = null;
 
   for (let attempt = 0; attempt < 5 && !appointment; attempt++) {
     try {
       appointment = await prisma.$transaction(async (tx) => {
-        // Enforce daily capacity from chamber schedule
+        
         const schedule = await tx.chamberSchedule.findFirst({
           where: { chamberId, dayOfWeek },
           select: { maxSerials: true },
@@ -462,7 +457,7 @@ const getChamberAppointments = async (
   chamberId: string,
   date?: string,
 ) => {
-  // BOLA/IDOR: verify the chamber belongs to the active workspace first.
+  
   const chamber = await prisma.chamber.findFirst({
     where: { id: chamberId, workspaceId },
     select: { id: true },

@@ -9,7 +9,7 @@ const createChamberSchema = z.object({
     chamberSlogan: z.string().optional(),
     logo: z.string().optional(),
     institutionId: z.string().uuid("Invalid Institution ID").optional(),
-    // Each contact number must be a valid Bangladesh mobile (normalised).
+    
     phones: z.array(bangladeshPhone()).optional(),
     templateConfig: z
       .object({
@@ -31,7 +31,7 @@ const updateChamberSchema = z.object({
     chamberSlogan: z.string().optional(),
     logo: z.string().optional(),
     isActive: z.boolean().optional(),
-    // Each contact number must be a valid Bangladesh mobile (normalised).
+    
     phones: z.array(bangladeshPhone()).optional(),
     templateConfig: z
       .object({

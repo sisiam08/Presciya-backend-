@@ -3,14 +3,14 @@ import {
 } from "../../../generated/prisma/enums";
 import { MedicineViewModel, PrescriptionViewModel } from "./view-model";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared document shell
-//
-// Every template renders the SAME view model (PrescriptionViewModel) and only
-// changes layout. Pagination strategy is identical across templates: one flex
-// column document whose footer uses `margin-top: auto`, so the signature/footer
-// anchors to the bottom of the last page and never repeats.
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+
+
+
+
+
+
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap');`;
 
@@ -128,9 +128,9 @@ ${parts.body}
 </html>
 `;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared fragments
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+
 
 const medGenericLine = (m: MedicineViewModel): string =>
   m.generic ? `<div class="med-generic">(${m.generic})</div>` : "";
@@ -141,10 +141,10 @@ const medInstructionLine = (m: MedicineViewModel): string =>
 const medNotesLine = (m: MedicineViewModel): string =>
   m.notes ? `<div class="med-notes">* ${m.notes}</div>` : "";
 
-// ── Watermark + custom footer (shared by every template) ─────────────────────
-// The watermark is drawn behind the content and clipped to the document; the
-// custom footer is a plain line rendered just above the page footer. Both are
-// empty strings when not configured, so templates render nothing.
+
+
+
+
 
 const watermarkLayer = (vm: PrescriptionViewModel): string => {
   if (!vm.watermark?.enabled) return "";
@@ -159,11 +159,11 @@ const watermarkLayer = (vm: PrescriptionViewModel): string => {
 const customFooter = (vm: PrescriptionViewModel): string =>
   vm.footerText ? `<div class="rx-footer-text">${vm.footerText}</div>` : "";
 
-// ── Optional clinical additions (history / On Examination / Investigation) ────
-// Each returns "" when it has no content at all, so no template ever prints an
-// empty heading or empty list. The title/body class names are passed in so every
-// template keeps its own styling; `tag` matches each template's markup (some
-// use <p>, some <div>).
+
+
+
+
+
 
 interface SectionClasses {
   title: string;
@@ -177,8 +177,8 @@ const historySection = (
 ): string => {
   if (!vm.history) return "";
   const tag = c.tag ?? "div";
-  // "Past History" so it never collides with the patient chronic/allergies
-  // block, which some templates already title "History".
+  
+  
   return `<${tag} class="${c.title}">Past History</${tag}><${tag} class="${c.body}">${vm.history}</${tag}>`;
 };
 
@@ -194,8 +194,8 @@ const examinationSection = (
   return `<${tag} class="${c.title}">On Examination</${tag}><${tag} class="${c.body}">${findings}</${tag}>`;
 };
 
-// Per-template section styling (kept next to the helpers so a template change
-// is a one-line edit here rather than in three call sites).
+
+
 const DEFAULT_SECTION: SectionClasses = { title: "section-title", body: "notes-content" };
 const MC_SECTION: SectionClasses = { title: "mc-sec-title", body: "mc-text", tag: "p" };
 const MP_SECTION: SectionClasses = { title: "mp-sec-title", body: "mp-text" };
@@ -225,8 +225,8 @@ const signatureBlock = (vm: PrescriptionViewModel, extraClass = ""): string => `
   </div>
 `;
 
-// Renders nothing when no QR was generated (e.g. the plan does not include
-// public QR verification), so a restricted plan never prints a broken image.
+
+
 const qrBlock = (vm: PrescriptionViewModel, extraClass = ""): string => {
   if (!vm.qrCodeUrl) return "";
   return `
@@ -245,9 +245,9 @@ const bmdcChip = (vm: PrescriptionViewModel): string =>
     ? `<span class="doctor-reg">BMDC Reg No: ${vm.doctor.registrationNo}</span>`
     : "";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TEMPLATE 1 — DEFAULT (the original Classic design, preserved)
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+
 
 const defaultTemplate = (vm: PrescriptionViewModel): TemplateParts => {
   const styles = `
@@ -394,9 +394,9 @@ const defaultTemplate = (vm: PrescriptionViewModel): TemplateParts => {
   return { styles, body };
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TEMPLATE 2 — MODERN CLINICAL
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+
 
 const modernClinicalTemplate = (vm: PrescriptionViewModel): TemplateParts => {
   const styles = `
@@ -550,9 +550,9 @@ const modernClinicalTemplate = (vm: PrescriptionViewModel): TemplateParts => {
   return { styles, body };
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TEMPLATE 3 — MINIMAL PROFESSIONAL
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+
 
 const minimalProfessionalTemplate = (
   vm: PrescriptionViewModel,
@@ -672,9 +672,9 @@ const minimalProfessionalTemplate = (
   return { styles, body };
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TEMPLATE 4 — MODERN MEDICAL
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+
 
 const modernMedicalTemplate = (vm: PrescriptionViewModel): TemplateParts => {
   const styles = `
@@ -819,9 +819,9 @@ const modernMedicalTemplate = (vm: PrescriptionViewModel): TemplateParts => {
   return { styles, body };
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TEMPLATE 5 — ELEGANT COMPACT
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+
 
 const elegantCompactTemplate = (vm: PrescriptionViewModel): TemplateParts => {
   const styles = `
@@ -957,9 +957,9 @@ const elegantCompactTemplate = (vm: PrescriptionViewModel): TemplateParts => {
   return { styles, body };
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Registry
-// ─────────────────────────────────────────────────────────────────────────────
+
+
+
 
 export const TEMPLATE_RENDERERS: Record<
   string,

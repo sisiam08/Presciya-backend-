@@ -11,7 +11,7 @@ function globalErrorHandler(
   res: Response,
   next: NextFunction,
 ) {
-  // Clean up any files that were uploaded to Cloudinary during this failed request
+  
   if (req.file || req.files) {
     const filesToDelete: string[] = [];
     if (req.file && (req.file as any).filename) {
@@ -98,7 +98,7 @@ function globalErrorHandler(
     }
   }
 
-  // Stable, machine-readable code the frontend can branch on (Section 22).
+  
   const codeByStatus: Record<number, string> = {
     400: "VALIDATION_ERROR",
     401: "UNAUTHORIZED",
@@ -111,8 +111,8 @@ function globalErrorHandler(
   };
   const errorCode = err.code || codeByStatus[statusCode] || "INTERNAL_ERROR";
 
-  // Log server errors with the request id, but never leak internals to the
-  // client in production (Section 21 / 25.4).
+  
+  
   if (statusCode >= 500) {
     console.error(
       JSON.stringify({
@@ -138,7 +138,7 @@ function globalErrorHandler(
     code: errorCode,
     requestId: req.id,
     details: errorDetails,
-    // Backward-compatible alias for existing clients
+    
     ...(errorDetails && { errors: errorDetails }),
   });
 }

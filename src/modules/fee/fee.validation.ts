@@ -11,8 +11,8 @@ const money = z
 
 const upsertFeeSchema = z.object({
   body: z.object({
-    // The fee is per chamber — the chamber must be supplied and is validated
-    // against the caller's current workspace in the service.
+    
+    
     chamberId: z.string().uuid("Invalid Chamber ID"),
     visitingFee: money,
     followUpFee: money.optional().nullable(),

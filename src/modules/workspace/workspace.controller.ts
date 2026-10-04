@@ -8,7 +8,7 @@ import { workspaceService } from "./workspace.service";
 import { FeatureServices } from "../feature/feature.service";
 import { WorkspaceType, MembershipStatus } from "../../../generated/prisma/enums";
 
-// Create a workspace
+
 const createWorkspace = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id;
@@ -18,7 +18,7 @@ const createWorkspace = catchAsync(
 
     const { name, image, type } = req.body;
 
-    // Institution workspaces are not part of the current public release.
+    
     if (type === WorkspaceType.INSTITUTION) {
       await FeatureServices.assertInstitutionEnabled();
     }
@@ -40,7 +40,7 @@ const createWorkspace = catchAsync(
   },
 );
 
-// Update workspace (owner only)
+
 const updateWorkspace = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id;
@@ -65,7 +65,7 @@ const updateWorkspace = catchAsync(
   },
 );
 
-// Delete workspace (owner only)
+
 const deleteWorkspace = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id;
@@ -84,7 +84,7 @@ const deleteWorkspace = catchAsync(
   },
 );
 
-// Suspend membership
+
 const suspendMember = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id;
@@ -110,7 +110,7 @@ const suspendMember = catchAsync(
   },
 );
 
-// Restore membership
+
 const restoreMember = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id;
@@ -136,7 +136,7 @@ const restoreMember = catchAsync(
   },
 );
 
-// Get all user workspaces
+
 const getUserWorkspaces = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id;
@@ -152,7 +152,7 @@ const getUserWorkspaces = catchAsync(
   },
 );
 
-// Get workspace detail
+
 const getWorkspace = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const workspaceId = req.params.workspaceId as string;
@@ -167,7 +167,7 @@ const getWorkspace = catchAsync(
   },
 );
 
-// Get workspace members
+
 const getWorkspaceMembers = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const workspaceId = req.params.workspaceId as string;
@@ -179,7 +179,7 @@ const getWorkspaceMembers = catchAsync(
   },
 );
 
-// Invite user to workspace
+
 const inviteUser = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const workspaceId = req.params.workspaceId as string;
@@ -208,7 +208,7 @@ const inviteUser = catchAsync(
   },
 );
 
-// Update member role
+
 const updateMemberRole = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const workspaceId = req.params.workspaceId as string;
@@ -231,7 +231,7 @@ const updateMemberRole = catchAsync(
   },
 );
 
-// Remove member from workspace
+
 const removeMember = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const workspaceId = req.params.workspaceId as string;
@@ -247,7 +247,7 @@ const removeMember = catchAsync(
   },
 );
 
-// Get pending invitations for current user
+
 const getPendingInvitations = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const email = req.user?.email;
@@ -265,7 +265,7 @@ const getPendingInvitations = catchAsync(
   },
 );
 
-// Accept invitation
+
 const acceptInvitation = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { token } = req.body;
@@ -285,7 +285,7 @@ const acceptInvitation = catchAsync(
   },
 );
 
-// Reject invitation
+
 const rejectInvitation = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { token } = req.body;
@@ -300,7 +300,7 @@ const rejectInvitation = catchAsync(
   },
 );
 
-// Get workspace invitations (sent from this workspace)
+
 const getWorkspaceInvitations = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const workspaceId = req.params.workspaceId as string;
@@ -315,7 +315,7 @@ const getWorkspaceInvitations = catchAsync(
   },
 );
 
-// Cancel invitation
+
 const cancelInvitation = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const workspaceId = req.params.workspaceId as string;
@@ -331,9 +331,9 @@ const cancelInvitation = catchAsync(
   },
 );
 
-// Verify an invitation token (public). Lets the accept page show the workspace
-// details before the invitee logs in / accepts. Only non-sensitive fields are
-// returned — never the full invitation record.
+
+
+
 const verifyInvitation = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const token = req.params.token as string;

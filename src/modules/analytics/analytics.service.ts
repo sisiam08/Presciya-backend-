@@ -4,15 +4,7 @@ import { Status } from "../../errors/httpStatus";
 import { WorkspaceType } from "../../../generated/prisma/enums";
 import { RequestScope, scopeFilter } from "../../utils/chamberScope";
 
-/**
- * Practice analytics for a doctor.
- *
- * Uses the SAME `RequestScope` contract as every other module: the active
- * workspace, narrowed to the active CHAMBER when one is selected, and widened to
- * every authorized workspace only on an explicit "all". Filtering by workspace
- * alone was the bug — the dashboard then counted every chamber's data while the
- * Patients/Prescriptions/Appointments pages were chamber-scoped.
- */
+
 const getDoctorAnalytics = async (userId: string, scope: RequestScope) => {
   const doctor = await prisma.doctor.findUnique({
     where: { userId },
@@ -23,28 +15,24 @@ const getDoctorAnalytics = async (userId: string, scope: RequestScope) => {
   }
 
   const allWorkspaces = scope.mode === "all";
-  /**
-   * Applied to EVERY metric so the default is strictly the active
-   * workspace + chamber. For "all" it is bounded to the authorized workspace
-   * ids (never an unbounded query).
-   */
+  
   const workspaceFilter = scopeFilter(scope);
 
-  // 1. Total Patients Count
+  
   const totalPatients = await prisma.patient.count({
     where: { doctorId: doctor.id, isDeleted: false, ...workspaceFilter },
   });
 
-  // 2. Prescriptions Count (Total)
+  
   const totalPrescriptions = await prisma.prescription.count({
     where: { doctorUserId: doctor.userId, isDeleted: false, ...workspaceFilter },
   });
 
-  // 3. Chambers Count — chambers inside the active workspace, or every chamber
-  //    the doctor owns when explicitly viewing all workspaces.
-  // Chamber scope mirrors the rest of the app: "all" counts every chamber the
-  // doctor owns; a selected chamber counts just that one; personal scope counts
-  // the workspace's locations.
+  
+  
+  
+  
+  
   const totalChambers = allWorkspaces
     ? await prisma.chamber.count({
         where: { workspace: { ownerId: doctor.userId }, isActive: true },
@@ -57,7 +45,7 @@ const getDoctorAnalytics = async (userId: string, scope: RequestScope) => {
           where: { workspaceId: scope.workspaceId, isActive: true },
         });
 
-  // 4. Prescriptions Per Day (Last 7 Days Trend)
+  
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
@@ -73,7 +61,7 @@ const getDoctorAnalytics = async (userId: string, scope: RequestScope) => {
     },
   });
 
-  // Group by date string (YYYY-MM-DD)
+  
   const trendMap: { [key: string]: number } = {};
   for (let i = 0; i < 7; i++) {
     const d = new Date();
@@ -96,7 +84,7 @@ const getDoctorAnalytics = async (userId: string, scope: RequestScope) => {
       count: trendMap[date],
     }));
 
-  // 5. Last 15 days consultations (Line Chart trend)
+  
   const fifteenDaysAgo = new Date();
   fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
   const linePrescriptions = await prisma.prescription.findMany({
@@ -133,7 +121,7 @@ const getDoctorAnalytics = async (userId: string, scope: RequestScope) => {
       count: lineMap[date],
     }));
 
-  // 6. Demographics (Male / Female counts)
+  
   const malePatients = await prisma.patient.count({
     where: { doctorId: doctor.id, gender: "MALE", isDeleted: false, ...workspaceFilter },
   });
@@ -141,7 +129,7 @@ const getDoctorAnalytics = async (userId: string, scope: RequestScope) => {
     where: { doctorId: doctor.id, gender: "FEMALE", isDeleted: false, ...workspaceFilter },
   });
 
-  // 7. Top 5 Most Prescribed Medicines
+  
   const topMedicines = await prisma.prescriptionMedicine.groupBy({
     by: ["snapshotBrandName", "snapshotGeneric"],
     where: {
@@ -186,7 +174,7 @@ const getDoctorAnalytics = async (userId: string, scope: RequestScope) => {
 };
 
 const getInstitutionAnalytics = async (workspaceId: string) => {
-  // The controller passes a workspace id; resolve the institution that owns it.
+  
   const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
     select: { ownerId: true },
@@ -204,12 +192,12 @@ const getInstitutionAnalytics = async (workspaceId: string) => {
     throw createAppError("Institution profile not found", Status.NOT_FOUND);
   }
 
-  // 1. Total assigned doctors count
+  
   const totalDoctors = await prisma.institutionDoctor.count({
     where: { institutionId: inst.id, isActive: true },
   });
 
-  // 2. Total chambers in institution workspace(s)
+  
   const institutionWorkspaces = await prisma.workspace.findMany({
     where: { ownerId: inst.userId, type: WorkspaceType.INSTITUTION },
     select: { id: true },
@@ -224,7 +212,7 @@ const getInstitutionAnalytics = async (workspaceId: string) => {
       })
     : 0;
 
-  // 3. Total Prescriptions in Institution workspaces
+  
   const totalPrescriptions = institutionWorkspaceIds.length
     ? await prisma.prescription.count({
         where: {
@@ -234,7 +222,7 @@ const getInstitutionAnalytics = async (workspaceId: string) => {
       })
     : 0;
 
-  // 4. Total Patients in Institution workspaces
+  
   const totalPatients = institutionWorkspaceIds.length
     ? await prisma.patient.count({
         where: {
@@ -244,7 +232,7 @@ const getInstitutionAnalytics = async (workspaceId: string) => {
       })
     : 0;
 
-  // 5. Prescriptions Trend (7 days)
+  
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
@@ -283,9 +271,9 @@ const getInstitutionAnalytics = async (workspaceId: string) => {
       count: trendMap[date],
     }));
 
-  // 5b. Last 15 days consultation trend — the dashboard's line chart reads
-  //     `lineTrend`, so the institution shape must provide it too (it was
-  //     missing, which made that chart permanently flat for institutions).
+  
+  
+  
   const fifteenDaysAgo = new Date();
   fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
   const linePrescriptions = institutionWorkspaceIds.length
@@ -313,7 +301,7 @@ const getInstitutionAnalytics = async (workspaceId: string) => {
     .sort()
     .map((date) => ({ date, count: lineMap[date] }));
 
-  // 6. Demographics
+  
   const malePatients = institutionWorkspaceIds.length
     ? await prisma.patient.count({
         where: { workspaceId: { in: institutionWorkspaceIds }, gender: "MALE", isDeleted: false },

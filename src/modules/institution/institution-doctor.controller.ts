@@ -8,10 +8,7 @@ import { AuthenticatedRequest } from "../../middleware/auth";
 
 
 
-/**
- * Get all doctors in an institution
- * GET /api/institution-doctors/:institutionId
- */
+
 export const getInstitutionDoctors = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { institutionId } = req.params as { institutionId: string };
@@ -32,10 +29,7 @@ export const getInstitutionDoctors = catchAsync(
   },
 );
 
-/**
- * Get institution doctor assignment details
- * GET /api/institution-doctors/assignment/:id
- */
+
 export const getInstitutionDoctorDetails = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { id } = req.params as { id: string };
@@ -56,10 +50,7 @@ export const getInstitutionDoctorDetails = catchAsync(
   },
 );
 
-/**
- * Update doctor assignment (change department or active status)
- * PUT /api/institution-doctors/:id
- */
+
 export const updateDoctorAssignment = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id;
@@ -100,10 +91,7 @@ export const updateDoctorAssignment = catchAsync(
   },
 );
 
-/**
- * Remove doctor from institution
- * DELETE /api/institution-doctors/:id
- */
+
 export const removeDoctorFromInstitution = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id;

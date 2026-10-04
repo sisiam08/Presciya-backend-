@@ -8,14 +8,14 @@ import { WorkspaceRole } from "../../../generated/prisma/enums";
 
 const router = Router();
 
-// Requires user to be logged in as a doctor or owner in active workspace
+
 router.use(
   authOnly(),
   authWorkspace([WorkspaceRole.DOCTOR, WorkspaceRole.OWNER]) as any,
 );
 
-// Search stays open (it powers the prescription medicine autocomplete), but the
-// doctor's favourites are a premium feature (admin-configurable per plan).
+
+
 const requireFavorites = requireFeatureAccess("medicine_favorites", {
   trackUsage: false,
   incrementBy: 0,

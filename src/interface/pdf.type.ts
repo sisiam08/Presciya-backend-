@@ -2,7 +2,7 @@ export interface IPdfRenderData {
   id: string;
   createdAt: Date;
   status: string;
-  // Rendering choices frozen per prescription. Default to ENGLISH / DEFAULT.
+  
   language?: string | null;
   template?: string | null;
   complaints?: string | null;
@@ -16,7 +16,7 @@ export interface IPdfRenderData {
   clinicalNotes?: string | null;
   advises?: string | null;
   nextVisitDate?: Date | null;
-  // Optional clinical free text: past history + On Examination (O/E) findings.
+  
   history?: string | null;
   examRespiratoryRate?: string | null;
   examLungs?: string | null;
@@ -26,7 +26,7 @@ export interface IPdfRenderData {
   examOedema?: string | null;
   examDehydration?: string | null;
   examOthers?: string | null;
-  // Ordered list of requested tests.
+  
   investigations?: Array<{ testName: string; note?: string | null }> | null;
   medicines: any[];
   doctor: {
@@ -35,8 +35,8 @@ export interface IPdfRenderData {
     specialization?: string | null;
     registrationNo?: string | null;
     signature?: string | null;
-    // BMDC registration is only printed once the doctor is professionally
-    // approved (Section 14.2).
+    
+    
     bmdcApproved?: boolean;
   };
   chamber?: {
@@ -60,18 +60,11 @@ export interface IPdfRenderData {
   };
   serialNumber?: string | null;
   verificationCode?: string | null;
-  /**
-   * Plan entitlement `qr_verification`. When explicitly `false` the QR block is
-   * omitted from the rendered prescription. `undefined` (the historical
-   * behaviour) keeps rendering the QR.
-   */
+  
   qrVerificationAllowed?: boolean;
-  /** Custom prescription footer (chamber footerText or personal settings). */
+  
   footerText?: string | null;
-  /**
-   * Resolved watermark for this prescription context (personal settings or
-   * chamber settings). Disabled/empty means nothing is drawn.
-   */
+  
   watermark?: {
     enabled: boolean;
     text?: string | null;

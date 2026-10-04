@@ -41,11 +41,7 @@ export interface InvestigationViewModel {
   note: string;
 }
 
-/**
- * On Examination fields, in the order they appear on the form. Labels are
- * medical shorthand and stay verbatim — like Complaints/Diagnosis they are not
- * part of the four language-aware parts (Section 13.1).
- */
+
 const EXAM_FIELDS: Array<{ key: keyof IPdfRenderData; label: string }> = [
   { key: "examRespiratoryRate", label: "R/R" },
   { key: "examLungs", label: "Lungs" },
@@ -74,9 +70,9 @@ export interface PrescriptionViewModel {
   disclaimer: string;
   colorTheme: string;
   showLogo: boolean;
-  /** Custom prescription footer (chamber or personal settings). */
+  
   footerText: string;
-  /** Resolved watermark for this prescription context. */
+  
   watermark: { enabled: boolean; text: string; url: string };
 
   doctor: {
@@ -111,15 +107,12 @@ export interface PrescriptionViewModel {
   advises: string;
   hasMedicalHistory: boolean;
 
-  /** Past medical history (separate from chief complaints). */
+  
   history: string;
-  /**
-   * On Examination rows — vital signs (BP/Pulse/Temperature/Weight/Height)
-   * followed by the examination findings. Only rows with a value are present.
-   */
+  
   examination: ExaminationViewModel[];
   hasExamination: boolean;
-  /** Requested tests — only rows with a test name. */
+  
   investigations: InvestigationViewModel[];
   hasInvestigations: boolean;
 
@@ -129,9 +122,9 @@ export interface PrescriptionViewModel {
 const asString = (value: unknown): string =>
   value === undefined || value === null ? "" : String(value);
 
-// Medicine lines arrive either normalised (brandName/…) or as raw
-// PrescriptionMedicine rows (snapshotBrandName/…). Accept both so the renderer
-// never depends on which layer produced the data.
+
+
+
 const readMedicineField = (
   med: Record<string, any>,
   field: "BrandName" | "Generic" | "Strength" | "Type",
@@ -140,8 +133,8 @@ const readMedicineField = (
   return asString(med[lower] ?? med[`snapshot${field}`]);
 };
 
-// Format the duration from structured (value+unit) or legacy free text, in the
-// prescription language (system-generated value, so it is localised).
+
+
 const formatDuration = (
   med: Record<string, any>,
   language: string | null | undefined,
@@ -156,8 +149,8 @@ const formatDuration = (
   return localizeDurationText(asString(med.duration), language);
 };
 
-// Build the dosage/instruction line adapted to the instruction type so no
-// medicine is forced into a tablet shape (Section 13.1).
+
+
 const buildDosage = (med: Record<string, any>): string => {
   const usage = med.usageType || "DAILY";
 
@@ -187,7 +180,7 @@ const buildDosage = (med: Record<string, any>): string => {
     return formatDosage(med.frequency || med.dosagePattern || "");
   }
 
-  // DAILY / STANDARD
+  
   const hasStructuredFrequency =
     med.frequencyMorning != null ||
     med.frequencyNoon != null ||
@@ -195,8 +188,8 @@ const buildDosage = (med: Record<string, any>): string => {
   const structured = hasStructuredFrequency
     ? `${med.frequencyMorning ?? 0}+${med.frequencyNoon ?? 0}+${med.frequencyNight ?? 0}`
     : "";
-  // Presentation rule lives in ONE place (`./dosage`) so the UI and the printed
-  // document can never disagree again.
+  
+  
   return formatDosage(structured || med.dosagePattern || med.frequency || "");
 };
 
@@ -231,9 +224,9 @@ export const buildPrescriptionViewModel = (
     PrescriptionDesignTemplate.DEFAULT;
   const labels = getPrescriptionLabels(language);
 
-  // The prescription date is general metadata, NOT one of the four
-  // language-aware parts, so it keeps the default format. Only Next Visit
-  // (an explicit language-aware part) localises its date.
+  
+  
+  
   const dateStr = new Date(createdAt).toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
@@ -252,9 +245,9 @@ export const buildPrescriptionViewModel = (
     minute: "2-digit",
   });
 
-  // NO fabricated fallbacks: a personal-workspace prescription has no chamber,
-  // and inventing "N/A" / "Private Practice" / "Online Consultation" printed
-  // chamber branding that does not exist. Empty means "render nothing".
+  
+  
+  
   const phones = chamber?.chamberPhone?.map((p) => p.phone).join(", ") || "";
   const colorTheme = chamber?.templateConfig?.colorTheme || "#0f8374";
   const showLogo = chamber?.templateConfig?.showLogo !== false;
@@ -265,8 +258,8 @@ export const buildPrescriptionViewModel = (
 
   const verifyTarget = verificationCode || id;
   const verifyUrl = `${config.appUrl || "http://localhost:3000"}/verify/prescription/${verifyTarget}`;
-  // Public QR verification is a plan entitlement. When the active plan does not
-  // include it, no QR is generated (the rest of the document is unchanged).
+  
+  
   const qrCodeUrl =
     data.qrVerificationAllowed === false
       ? ""
@@ -291,16 +284,16 @@ export const buildPrescriptionViewModel = (
       duration: escapeHtml(formatDuration(med, language)),
       mealTimingLabel: escapeHtml(mealLabel),
       instruction: escapeHtml(med.instruction),
-      // Predefined special instructions are localised; doctor-typed custom text
-      // passes through unchanged.
+      
+      
       notes: escapeHtml(localizeSpecialInstruction(med.notes, language)),
     };
   });
 
-  // On Examination is ONE section: the vital signs come first (with their
-  // units), then the examination findings. Rows without a value are dropped, so
-  // a template renders the whole section off `hasExamination` and never prints
-  // an empty label or a separate "Vital Signs" section.
+  
+  
+  
+  
   const rawData = data as unknown as Record<string, unknown>;
   const examination: ExaminationViewModel[] = [
     {

@@ -7,10 +7,10 @@ let isDbIndexed = false;
 const initSearchIndex = async () => {
   if (isDbIndexed) return;
   try {
-    // 1. Enable pg_trgm extension if not already present
+    
     await prisma.$executeRawUnsafe(`CREATE EXTENSION IF NOT EXISTS pg_trgm;`);
 
-    // 2. Add GIN trigram indexes on brandName and generic columns (PostgreSQL format)
+    
     await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS medicine_brand_trgm_idx ON medicines USING gin ("brandName" gin_trgm_ops);
     `);
@@ -30,11 +30,7 @@ const searchMedicines = async (
   query: string,
   page: number = 1,
   limit: number = 20,
-  /**
-   * Plan entitlement `medicine_favorites`. When false the frequently-used list
-   * is not served (and results are not flagged as favourites), so disabling the
-   * feature in the Admin panel stops it at the API rather than only in the UI.
-   */
+  
   favoritesAllowed: boolean = false
 ) => {
   await initSearchIndex();
@@ -49,8 +45,8 @@ const searchMedicines = async (
 
   const skip = (page - 1) * limit;
 
-  // 1. If search input is empty, return doctor's favorites / most frequently used medicines immediately!
-  //    Gated: this list IS the `medicine_favorites` feature.
+  
+  
   if (!query || query.trim() === "") {
     if (!favoritesAllowed) {
       return { results: [], meta: { page, limit, total: 0, totalPages: 0 } };
@@ -74,8 +70,8 @@ const searchMedicines = async (
   const cleanQuery = query.trim();
 
   try {
-    // 2. Perform fuzzy trigram search in Postgres
-    // similarity() calculates score. order by score desc. % matches using pg_trgm similarity threshold.
+    
+    
     const sql = `
       SELECT id, "brandName", type, slug, "dosageForm", generic, strength, manufacturer,
              similarity("brandName", $1) AS score
@@ -95,9 +91,9 @@ const searchMedicines = async (
       skip
     );
 
-    // Fetch favorites of this doctor to inject an 'isFavorite' flag. Skipped
-    // entirely when the plan does not include the feature, so no favourite
-    // affordance is ever derived from a denied entitlement.
+    
+    
+    
     const doctorFavs = favoritesAllowed
       ? await prisma.doctorFavoriteMedicine.findMany({
           where: { doctorId: doctor.id },
@@ -127,7 +123,7 @@ const searchMedicines = async (
       },
     };
   } catch (error) {
-    // Standard ILIKE fallback if pg_trgm is not supported in Postgres environment
+    
     console.warn("Falling back to ILIKE search due to error:", error);
     
     const results = await prisma.medicine.findMany({

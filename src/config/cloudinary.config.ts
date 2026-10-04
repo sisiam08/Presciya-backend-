@@ -55,11 +55,7 @@ export const uploadFileToCloudinary = async (
   });
 };
 
-/**
- * Uploads a sensitive document (verification evidence) as a *private*
- * Cloudinary asset so it is never publicly reachable (Section 21). Callers
- * receive only the public id/format; access is granted via signed URLs.
- */
+
 export const uploadPrivateFileToCloudinary = async (
   buffer: Buffer,
   fileName: string,
@@ -103,10 +99,7 @@ export const uploadPrivateFileToCloudinary = async (
   });
 };
 
-/**
- * Builds a short-lived signed URL for a private asset. Only the backend should
- * ever call this (for the owner or a super admin), never the public site.
- */
+
 export const getSignedPrivateUrl = (
   publicId: string,
   format: string | undefined,

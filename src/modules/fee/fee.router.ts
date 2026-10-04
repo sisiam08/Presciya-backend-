@@ -7,11 +7,11 @@ import { requireFeatureAccess } from "../../middleware/featureAccess";
 
 const router = Router();
 
-// Any authenticated member may read fees; only the doctor themself can set
-// their own fee (enforced in the service via the caller's doctor profile).
+
+
 router.use(authWorkspace() as any);
 
-// Setting fees is a premium feature (entitlement only, no usage counting).
+
 const requireFeeFeature = requireFeatureAccess("visiting_fees", {
   trackUsage: false,
   incrementBy: 0,

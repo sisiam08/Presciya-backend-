@@ -26,7 +26,7 @@ import { RevenueServices } from "../revenue/revenue.service";
 import { SubscriptionServices } from "../subscription/subscription.service";
 import { getStartOfDay, getStartOfNextDay } from "../../utils/datetime";
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -50,8 +50,8 @@ const parseDate = (value: string): Date => {
   return parsed;
 };
 
-// Day boundaries are Bangladesh calendar days (the product's operating
-// timezone), so daily serials and limits reset at local midnight.
+
+
 const dayStart = (d: Date) => getStartOfDay(d);
 const nextDay = (d: Date) => getStartOfNextDay(d);
 
@@ -64,7 +64,7 @@ const resolveWorkspace = async (workspaceId: string) => {
   return ws;
 };
 
-/** A doctor user resolves to their own Doctor profile. */
+
 const getDoctorForUser = async (userId: string) =>
   prisma.doctor.findUnique({ where: { userId } });
 
@@ -82,7 +82,7 @@ const resolveDoctorId = async (
     );
   }
 
-  // The doctor must be a member of the workspace (BOLA/IDOR guard).
+  
   const doctor = await prisma.doctor.findUnique({
     where: { id: doctorId },
     select: { id: true, userId: true },
@@ -104,8 +104,8 @@ const resolveDoctorId = async (
   return doctor.id;
 };
 
-// Discounts / free consultations require a "manage" role. Assistants may
-// record full payments but cannot reduce the fee unless explicitly promoted.
+
+
 const DISCOUNT_ROLES = ["OWNER", "ADMIN", "DOCTOR", "MANAGER"];
 const assertCanDiscount = async (userId: string, workspaceId: string) => {
   const membership = await prisma.membership.findUnique({
@@ -131,7 +131,7 @@ const assertPatient = async (patientId: string, workspaceId: string) => {
   return patient;
 };
 
-// ─── Fee + payment snapshot ──────────────────────────────────────────────────
+
 
 const buildFeeSnapshot = async (
   doctorId: string,
@@ -139,13 +139,13 @@ const buildFeeSnapshot = async (
   appointmentType: AppointmentType,
   discountInput: number,
 ) => {
-  // The fee belongs to the CHAMBER the appointment is booked in — never a
-  // global doctor fee. A personal (chamber-less) appointment has no fee.
+  
+  
   const config = await FeeServices.getFeeConfig(doctorId, chamberId);
 
-  // The fee follows the VISIT TYPE: a follow-up is charged the follow-up fee
-  // (0 when the chamber has none configured) and a normal visit the visiting
-  // fee. A follow-up must never silently fall back to the visiting fee.
+  
+  
+  
   const base =
     appointmentType === AppointmentType.FOLLOW_UP
       ? Number(config?.followUpFee ?? 0)
@@ -161,13 +161,7 @@ const buildFeeSnapshot = async (
   };
 };
 
-/**
- * Enforces the plan's daily appointment limit for a doctor. The plan limit is
- * admin-configurable (PlanFeature for the `appointments` feature); null means
- * unlimited. Counts the doctor's NON-cancelled appointments for the day across
- * ALL workspaces so switching workspaces cannot bypass the limit. Runs inside
- * the create transaction to keep the window small.
- */
+
 const assertDailyAppointmentLimit = async (
   tx: any,
   doctorId: string,
@@ -198,7 +192,7 @@ const assertDailyAppointmentLimit = async (
   });
 
   const limit = planFeature?.limitValue ?? null;
-  if (limit === null) return; // unlimited
+  if (limit === null) return; 
 
   const count = await tx.appointment.count({
     where: {
@@ -221,7 +215,7 @@ const assertDailyAppointmentLimit = async (
   }
 };
 
-// ─── Serial generation (workspace-scoped, daily reset) ───────────────────────
+
 
 const generateSerial = async (
   workspaceId: string,
@@ -231,7 +225,7 @@ const generateSerial = async (
   const last = await prisma.appointment.findFirst({
     where: {
       workspaceId,
-      // Serials are per operational chamber (or the personal scope).
+      
       ...chamberScopeFilter(chamberId),
       appointmentDate: {
         gte: dayStart(appointmentDate),
@@ -244,13 +238,9 @@ const generateSerial = async (
   return (last?.serialNo ?? 0) + 1;
 };
 
-// ─── Finance integration (idempotent) ────────────────────────────────────────
 
-/**
- * Records the consultation income for a paid appointment. Idempotent: an
- * existing (non-deleted) INCOME transaction for the appointment is reused, so
- * repeated payment calls can never double-count revenue.
- */
+
+
 const recordAppointmentIncome = async (
   tx: any,
   appointment: {
@@ -269,8 +259,8 @@ const recordAppointmentIncome = async (
   });
   if (existing) return existing;
 
-  // Prefer a "Consultation" income category; fall back to any active income
-  // category (system or workspace-specific).
+  
+  
   const category =
     (await tx.financialCategory.findFirst({
       where: {
@@ -305,7 +295,7 @@ const recordAppointmentIncome = async (
   });
 };
 
-// ─── Create ──────────────────────────────────────────────────────────────────
+
 
 const createAppointment = async (
   userId: string,
@@ -328,8 +318,8 @@ const createAppointment = async (
   await checkUserVerification(userId);
 
   const ws = await resolveWorkspace(workspaceId);
-  // Personal workspaces normally have no appointment workflow, but a personal
-  // practice that has chambers keeps the existing chamber-based booking flow.
+  
+  
   if (ws.type === WorkspaceType.PERSONAL) {
     const chamberCount = await prisma.chamber.count({ where: { workspaceId } });
     if (chamberCount === 0) {
@@ -370,15 +360,15 @@ const createAppointment = async (
     discountInput,
   );
 
-  // Payment intent (optional): create as PENDING and settle later, or settle
-  // immediately as PAID / FREE.
+  
+  
   const intent = data.paymentStatus ?? AppointmentPaymentStatus.PENDING;
 
   let appointment: any = null;
   for (let attempt = 0; attempt < 5 && !appointment; attempt++) {
     try {
       appointment = await prisma.$transaction(async (tx) => {
-        // Enforce the admin-configured daily appointment limit.
+        
         await assertDailyAppointmentLimit(
           tx,
           doctorId,
@@ -442,7 +432,7 @@ const createAppointment = async (
     userAgent: meta?.userAgent,
   });
 
-  // Settle immediately when requested.
+  
   if (
     intent === AppointmentPaymentStatus.PAID ||
     intent === AppointmentPaymentStatus.FREE
@@ -461,7 +451,7 @@ const createAppointment = async (
     );
   }
 
-  // Notify the doctor.
+  
   const doctor = await prisma.doctor.findUnique({
     where: { id: appointment.doctorId },
     select: { userId: true },
@@ -478,7 +468,7 @@ const createAppointment = async (
   return appointment;
 };
 
-// ─── Payment ─────────────────────────────────────────────────────────────────
+
 
 const recordPayment = async (
   appointmentId: string,
@@ -501,7 +491,7 @@ const recordPayment = async (
     throw createAppError("Appointment not found", Status.NOT_FOUND);
   }
 
-  // Idempotency: never double-charge a paid appointment.
+  
   if (appt.paymentStatus === AppointmentPaymentStatus.PAID) {
     throw createAppError(
       "This appointment is already paid",
@@ -528,7 +518,7 @@ const recordPayment = async (
       : Number(appt.discount);
   const payable = round2(visitingFee - discount);
 
-  // Changing the discount or waiving the fee requires a manage role.
+  
   const discountChanged =
     data.discount !== undefined && Number(data.discount) !== Number(appt.discount);
   if (discountChanged || data.markFree) {
@@ -550,8 +540,8 @@ const recordPayment = async (
     ? AppointmentPaymentStatus.FREE
     : AppointmentPaymentStatus.PAID;
 
-  // Revenue split snapshot (institution workspaces only, and only when money
-  // actually changed hands).
+  
+  
   let revenueSharePercent: number | null = null;
   let hospitalShareAmount: number | null = null;
   let doctorShareAmount: number | null = null;
@@ -626,9 +616,9 @@ const recordPayment = async (
   return updated;
 };
 
-// ─── Search ──────────────────────────────────────────────────────────────────
 
-/** Today's appointments for the workspace (serial / phone / name search). */
+
+
 const searchToday = async (
   userId: string,
   workspaceId: string,
@@ -664,7 +654,7 @@ const searchToday = async (
   });
 };
 
-// ─── List / status ───────────────────────────────────────────────────────────
+
 
 const listAppointments = async (
   workspaceId: string,
@@ -685,15 +675,15 @@ const listAppointments = async (
   );
 
   const where: any = { workspaceId };
-  // Scope: the current chamber/personal context, or every authorized
-  // workspace in All Workspaces mode.
+  
+  
   if (filters.scope) {
     Object.assign(where, scopeFilter(filters.scope));
   }
   if (filters.doctorId) where.doctorId = filters.doctorId;
   if (filters.patientId) where.patientId = filters.patientId;
   if (filters.date) {
-    // An explicit date is the user intentionally requesting that day.
+    
     const d = parseDate(filters.date);
     where.appointmentDate = { gte: dayStart(d), lt: nextDay(d) };
   } else if (filters.from || filters.to) {
@@ -701,9 +691,9 @@ const listAppointments = async (
     if (filters.from) where.appointmentDate.gte = filters.from;
     if (filters.to) where.appointmentDate.lte = filters.to;
   } else {
-    // DEFAULT: today only. The appointment list is a daily queue — it must
-    // never mix other days' appointments into the default view. Other days
-    // stay reachable by requesting them explicitly (`date` or `from`/`to`).
+    
+    
+    
     const today = new Date();
     where.appointmentDate = { gte: dayStart(today), lt: nextDay(today) };
   }
@@ -774,7 +764,7 @@ const updateStatus = async (
     throw createAppError("Appointment not found", Status.NOT_FOUND);
   }
 
-  // A paid appointment must be refunded before it can be cancelled.
+  
   if (
     status === AppointmentStatus.CANCELLED &&
     appt.paymentStatus === AppointmentPaymentStatus.PAID

@@ -30,10 +30,10 @@ const createPatient = async (
     emergencyContact?: string;
     patientNotes?: string;
   },
-  // Chamber the patient is being registered in (null = personal workspace).
+  
   chamberId: string | null = null,
 ) => {
-  // Check if user is verified to perform this action
+  
   await checkUserVerification(userId);
 
   const doctor = await prisma.doctor.findUnique({
@@ -44,8 +44,8 @@ const createPatient = async (
     throw createAppError("Doctor profile not found", Status.NOT_FOUND);
   }
 
-  // Store the canonical domestic form (+8801712345678 -> 01712345678) so the
-  // same number never ends up with multiple representations.
+  
+  
   const data = {
     ...patientData,
     ...(patientData.phone
@@ -56,15 +56,15 @@ const createPatient = async (
       : {}),
   };
 
-  // Duplicate detection is workspace-scoped (Section 11): the same phone in a
-  // different workspace must not block registration here.
+  
+  
   if (data.phone) {
     const existingPatient = await prisma.patient.findFirst({
       where: {
         phone: data.phone,
         workspaceId,
-        // Duplicates are only checked within the SAME chamber context — the
-        // same person may legitimately have a record in another chamber.
+        
+        
         ...chamberScopeFilter(chamberId),
         isDeleted: false,
       },
@@ -83,7 +83,7 @@ const createPatient = async (
       data: {
         doctorId: doctor.id,
         workspaceId,
-        // Canonical chamber ownership for the record.
+        
         chamberId,
         ...data,
       },
@@ -116,13 +116,13 @@ const getPatientById = async (
   workspaceId: string,
   scope?: RequestScope,
 ) => {
-  // Workspace-scoped lookup (Section 6.4): never return another workspace's
-  // patient by guessing an ID.
+  
+  
   const patient = await prisma.patient.findFirst({
     where: {
       id,
-      // Current-workspace mode also pins the chamber, so a record from another
-      // chamber is not reachable even with a known ID.
+      
+      
       ...(scope ? (scopeFilter(scope) as any) : { workspaceId }),
       isDeleted: false,
     },
@@ -156,14 +156,14 @@ const updatePatient = async (
   data: any,
   scope?: RequestScope,
 ) => {
-  // Check if user is verified to perform this action
+  
   await checkUserVerification(userId);
 
   const patient = await prisma.patient.findFirst({
     where: {
       id,
-      // Current-workspace mode also pins the chamber, so a record from another
-      // chamber is not reachable even with a known ID.
+      
+      
       ...(scope ? (scopeFilter(scope) as any) : { workspaceId }),
       isDeleted: false,
     },
@@ -173,7 +173,7 @@ const updatePatient = async (
     throw createAppError("Patient not found", Status.NOT_FOUND);
   }
 
-  // Normalise phone values to the canonical domestic form on update too.
+  
   const updateData = {
     ...data,
     ...(typeof data?.phone === "string" && data.phone
@@ -222,14 +222,14 @@ const deletePatient = async (
   workspaceId: string,
   scope?: RequestScope,
 ) => {
-  // Check if user is verified to perform this action
+  
   await checkUserVerification(userId);
 
   const patient = await prisma.patient.findFirst({
     where: {
       id,
-      // Current-workspace mode also pins the chamber, so a record from another
-      // chamber is not reachable even with a known ID.
+      
+      
       ...(scope ? (scopeFilter(scope) as any) : { workspaceId }),
       isDeleted: false,
     },
@@ -287,13 +287,13 @@ const searchPatients = async (
 
   const skip = (page - 1) * limit;
 
-  // Fuzzy match on name or phone, strictly scoped to the active workspace so
-  // patients never leak across workspaces (Section 6.4).
+  
+  
   const whereClause = {
     isDeleted: false,
     workspaceId,
-    // Chamber isolation by default; workspaceScope=all widens to every
-    // workspace the user is authorized for.
+    
+    
     ...(scope ? (scopeFilter(scope) as any) : {}),
     OR: [
       { name: { contains: query, mode: "insensitive" as const } },
@@ -332,8 +332,8 @@ const getPatientTimeline = async (
   const patient = await prisma.patient.findFirst({
     where: {
       id,
-      // Current-workspace mode also pins the chamber, so a record from another
-      // chamber is not reachable even with a known ID.
+      
+      
       ...(scope ? (scopeFilter(scope) as any) : { workspaceId }),
       isDeleted: false,
     },

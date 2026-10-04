@@ -8,19 +8,12 @@ import {
   FinancialTransactionType,
 } from "../generated/prisma/client";
 
-/**
- * Platform feature catalog. Each feature gets a global feature flag and can be
- * attached to plan variants with per-period limits (Section 17).
- */
+
 const FEATURES: {
   key: string;
   description: string;
   category: string;
-  /**
-   * Global availability for a brand-new flag row. Existing rows are never
-   * overwritten, so an admin toggling a flag is respected on later seeds.
-   * Institution ships disabled: the code is in place but not publicly usable.
-   */
+  
   enabledByDefault?: boolean;
 }[] = [
   { key: "create_prescription", description: "Create digital prescriptions", category: "prescriptions" },
@@ -35,38 +28,34 @@ const FEATURES: {
   { key: "max_chambers", description: "Maximum number of chambers", category: "workspaces" },
   { key: "finance", description: "Internal business finance", category: "finance" },
   { key: "visiting_fees", description: "Configure visiting / follow-up fees", category: "finance" },
-  // ── Three INDEPENDENT prescription features ────────────────────────────────
-  // These are deliberately separate entitlements and must never be collapsed
-  // into one another:
-  //   prescription_language         → the language the prescription is written in
-  //   prescription_design_templates → the BUILT-IN visual designs (Classic,
-  //                                   Modern Clinical, Minimal Professional,
-  //                                   Modern Medical, Elegant Compact)
-  //   prescription_templates        → the doctor's SAVED/reusable prescriptions
-  //                                   (complaints / advises / medicines)
+  
+  
+  
+  
+  
+  
+  
+  
+  
   { key: "prescription_language", description: "Change the prescription language", category: "prescriptions" },
   { key: "prescription_design_templates", description: "Choose between the built-in prescription designs", category: "prescriptions" },
   { key: "prescription_templates", description: "Save and reuse your own prescription templates", category: "prescriptions" },
-  // Not part of the current public release. Disabled by default globally; the
-  // implementation stays in the codebase and can be switched on from the admin
-  // panel when institution functionality is finished.
+  
+  
+  
   { key: "institution", description: "Institution, hospital and clinic workspaces", category: "workspaces", enabledByDefault: false },
 ];
 
 const VARIANTS: {
-  /**
-   * STABLE identity. The seed matches on this — never on `variantName`, because
-   * an admin may rename a plan and a name-based lookup would then create a
-   * duplicate of the old plan on the next seed run.
-   */
+  
   key: string;
   variantName: string;
-  /** Canonical business order: Free → Personal → Clinic → Institute. */
+  
   sortOrder: number;
   dailyPrescriptionLimit: number;
   price: number;
   description: Record<string, string>;
-  /** Only applied when the plan is first created; admins own it afterwards. */
+  
   isActive?: boolean;
 }[] = [
   {
@@ -112,16 +101,16 @@ const VARIANTS: {
       en: "Full institutional management. Unlimited doctors, departments, prescriptions.",
       bn: "সম্পূর্ণ প্রাতিষ্ঠানিক ব্যবস্থাপনা। সীমাহীন ডাক্তার, বিভাগ, প্রেসক্রিপশন।",
     },
-    // Institution plans are not offered publicly yet. Kept in the database and
-    // re-activatable from the admin panel.
+    
+    
     isActive: false,
   },
 ];
 
-// Which feature keys each plan variant includes (limitValue = null → unlimited).
+
 const PLAN_FEATURES: Record<string, { key: string; limit: number | null }[]> = {
-  // Free plan: 1 chamber, limited appointments (15/day) and prescriptions
-  // (3/day). No finance, visiting fees or prescription-language features.
+  
+  
   "Free Trial": [
     { key: "create_prescription", limit: 3 },
     { key: "appointments", limit: 15 },
@@ -203,15 +192,11 @@ async function seedFeatures() {
   console.log(`Seeded ${FEATURES.length} features and feature flags.`);
 }
 
-/**
- * Workspace-level permission catalog + role mappings. The workspace member and
- * invitation routes guard on these keys; without them `hasPermission` throws
- * "Permission not found" and owners get locked out of member management.
- */
+
 const WORKSPACE_PERMISSIONS: { key: string; description: string }[] = [
   { key: "invite_users", description: "Invite and remove workspace members" },
   { key: "manage_roles", description: "Change member roles" },
-  // Phase 3: internal business finance
+  
   { key: "finance_view", description: "View financial transactions and summaries" },
   { key: "finance_create", description: "Record income and expense transactions" },
   { key: "finance_update", description: "Edit financial transactions" },
@@ -240,10 +225,7 @@ const ROLE_PERMISSION_MAP: Record<string, string[]> = {
   ASSISTANT: ["finance_view"],
 };
 
-/**
- * Default (system) financial categories shared across all workspaces. Doctors
- * and institutions can add their own workspace-specific categories too.
- */
+
 const DEFAULT_FINANCIAL_CATEGORIES: {
   name: string;
   type: FinancialTransactionType;
@@ -314,9 +296,9 @@ async function seedFinancialCategories() {
 
 async function seedPlans() {
   for (const variant of VARIANTS) {
-    // Match by STABLE KEY. A name-based lookup is what created duplicate plans
-    // whenever an admin renamed one, so `variantName` is only used as a
-    // one-time adoption fallback for rows that predate the key column.
+    
+    
+    
     const existing =
       (await prisma.subscriptionVariant.findUnique({
         where: { key: variant.key },
@@ -329,8 +311,8 @@ async function seedPlans() {
       ? await prisma.subscriptionVariant.update({
           where: { id: existing.id },
           data: {
-            // Adopt the key + canonical order, but NEVER touch admin-owned
-            // metadata (name, price, description, active flag).
+            
+            
             key: variant.key,
             sortOrder: variant.sortOrder,
           },
@@ -399,8 +381,8 @@ export async function seed() {
   console.log("Seed completed successfully!");
 }
 
-// Allow `npm run seed` (tsx prisma/seed.ts) to execute directly, while still
-// exporting `seed` for programmatic use by the server bootstrap.
+
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   seed()
     .then(async () => {

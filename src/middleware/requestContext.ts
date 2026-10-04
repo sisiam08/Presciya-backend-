@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import crypto from "crypto";
 
 declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
+  
   namespace Express {
     interface Request {
       id?: string;
@@ -10,10 +10,7 @@ declare global {
   }
 }
 
-/**
- * Attaches a request id to every request and echoes it back in the
- * X-Request-Id header so a request can be traced across logs (Section 25.4).
- */
+
 export const requestId = (req: Request, res: Response, next: NextFunction) => {
   const incoming = req.headers["x-request-id"];
   const id =
@@ -25,10 +22,7 @@ export const requestId = (req: Request, res: Response, next: NextFunction) => {
   next();
 };
 
-/**
- * Minimal structured access log. Never logs bodies, tokens, query secrets or
- * medical content — only method, path, status, duration and request id.
- */
+
 export const requestLogger = (
   req: Request,
   res: Response,

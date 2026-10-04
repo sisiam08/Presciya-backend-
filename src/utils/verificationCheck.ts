@@ -4,7 +4,7 @@ import { createAppError } from "../errors/appError";
 import { Status } from "../errors/httpStatus";
 
 export const checkUserVerification = async (userId: string): Promise<void> => {
-  // Check if user is a doctor
+  
   const doctor = await prisma.doctor.findUnique({
     where: { userId },
     select: { verificationStatus: true, name: true },
@@ -22,7 +22,7 @@ export const checkUserVerification = async (userId: string): Promise<void> => {
     return;
   }
 
-  // Check if user is an institution
+  
   const institution = await prisma.institution.findUnique({
     where: { userId },
     select: { verificationStatus: true, name: true },

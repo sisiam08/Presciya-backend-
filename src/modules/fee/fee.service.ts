@@ -38,11 +38,7 @@ const serialize = (fee: any) =>
       }
     : null;
 
-/**
- * A fee always belongs to a CHAMBER. The chamber is validated against the
- * workspace the caller is currently operating in, so a client can never write
- * to another workspace's chamber by passing a foreign chamber ID.
- */
+
 const assertChamberInWorkspace = async (
   chamberId: string,
   workspaceId: string,
@@ -60,11 +56,7 @@ const assertChamberInWorkspace = async (
   return chamber;
 };
 
-/**
- * The doctor — and only the doctor — sets their own consultation fee for a
- * CHAMBER. A hospital/clinic can never change this value, and changing one
- * chamber never affects any other.
- */
+
 const upsertMyFee = async (
   userId: string,
   workspaceId: string,
@@ -140,7 +132,7 @@ const getMyFee = async (
   return serialize(fee);
 };
 
-/** Institution/owner view: read any doctor's fee for a chamber (read-only). */
+
 const getDoctorFee = async (
   userId: string,
   workspaceId: string,
@@ -155,12 +147,7 @@ const getDoctorFee = async (
   return serialize(fee);
 };
 
-/**
- * Returns the doctor's configured fee for a CHAMBER (or null when unset). The
- * appointment service picks visitingFee vs followUpFee based on the visit type,
- * then freezes the value on the appointment. A personal appointment has no
- * chamber and therefore no fee.
- */
+
 const getFeeConfig = async (doctorId: string, chamberId?: string | null) => {
   if (!chamberId) return null;
 

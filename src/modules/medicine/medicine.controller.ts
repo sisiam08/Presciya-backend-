@@ -11,11 +11,11 @@ const searchMedicines = catchAsync(async (req: Request, res: Response) => {
   const workspaceId = (req as any).workspaceId as string;
   const { q = "", page = 1, limit = 20 } = req.query;
 
-  // The EMPTY-query branch of search returns the doctor's frequently-used
-  // medicines — that IS the `medicine_favorites` feature. Plain searching (with
-  // a query) stays open because it powers the prescription autocomplete.
-  // Enforced here so turning the plan feature off actually stops the feature
-  // rather than only hiding it in the UI.
+  
+  
+  
+  
+  
   const favoritesAllowed = await FeatureServices.isFeatureAllowed({
     userId,
     workspaceId,

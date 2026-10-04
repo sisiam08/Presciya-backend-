@@ -168,8 +168,8 @@ describe("generatePrescriptionHtml — content", () => {
     expect(html).toContain("P-0001");
     expect(html).toContain("PRS-ABCD-000001");
     expect(html).toContain("Test Chamber");
-    // The generated/disclaimer footer and the "Registered Practitioner" label
-    // are intentionally removed from every template.
+    
+    
     expect(html).not.toContain("Generated:");
     expect(html).not.toContain("Registered Practitioner");
     expect(html).not.toContain("digitally generated prescription");

@@ -8,12 +8,12 @@ import { WorkspaceRole } from "../../../generated/prisma/enums";
 
 const router = Router();
 
-// Revenue sharing applies only to institution workspaces, which are not part
-// of the current public release. Admin-controlled gate (FeatureFlag).
+
+
 router.use(requireInstitutionEnabled as any);
 
-// Reads: any active member. Writes: OWNER/ADMIN of the institution workspace
-// only. (The service additionally verifies the workspace is an institution.)
+
+
 router.get(
   "/",
   authWorkspace() as any,

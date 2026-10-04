@@ -11,9 +11,9 @@ const auditMeta = (req: Request) => ({
   userAgent: req.headers["user-agent"] as string | undefined,
 });
 
-// ─── Transactions ────────────────────────────────────────────────────────────
-// No `createTransaction` handler: manual transaction creation was removed along
-// with the manual income/expense workflow. See finance.router.ts.
+
+
+
 
 const listTransactions = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.id as string;
@@ -98,7 +98,7 @@ const deleteTransaction = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-// ─── Summary / Reports ───────────────────────────────────────────────────────
+
 
 const getSummary = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.id as string;
@@ -141,7 +141,7 @@ const getReport = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-// ─── Categories ──────────────────────────────────────────────────────────────
+
 
 const listCategories = catchAsync(async (req: Request, res: Response) => {
   const userId = req.user?.id as string;

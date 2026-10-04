@@ -29,10 +29,10 @@ const createPrescription = async (
   workspaceId: string,
   prescriptionData: {
     patientId: string;
-    chamberId?: string; // Optional — resolved to the workspace's chamber
+    chamberId?: string; 
     complaints?: string;
     diagnosis?: string;
-    // Vital signs (moved to ClinicalObservation)
+    
     bloodPressure?: string;
     pulse?: string;
     temperature?: string;
@@ -42,7 +42,7 @@ const createPrescription = async (
     clinicalNotes?: string;
     advises?: string;
     nextVisitDate?: string;
-    // Optional clinical free text: past history + On Examination findings.
+    
     history?: string;
     examRespiratoryRate?: string;
     examLungs?: string;
@@ -52,23 +52,23 @@ const createPrescription = async (
     examOedema?: string;
     examDehydration?: string;
     examOthers?: string;
-    // Ordered list of requested tests.
+    
     investigations?: Array<{ testName: string; note?: string }>;
     medicines: any[];
     status?: PrescriptionStatus;
-    // Optional per-prescription overrides; default to the doctor's settings.
+    
     language?: PrescriptionLanguage;
     template?: PrescriptionDesignTemplate;
-    // Required in CHAMBER/INSTITUTION context (the eligible visit).
+    
     appointmentId?: string;
   },
 ) => {
-  // Check if user is verified to perform this action
+  
   await checkUserVerification(userId);
 
-  // 1. Feature access + usage tracking
-  // Usage is consumed exactly once by the route middleware; re-validate here
-  // without incrementing (incrementBy: 0) so we never double-count.
+  
+  
+  
   await FeatureServices.checkFeatureAccess({
     featureKey: "create_prescription",
     userId,
@@ -86,8 +86,8 @@ const createPrescription = async (
     throw createAppError("Doctor profile not found", Status.NOT_FOUND);
   }
 
-  // Freeze the rendering choice for this prescription. Explicit request values
-  // win; otherwise inherit the doctor's Settings defaults.
+  
+  
   const language =
     prescriptionData.language ??
     doctor.prescriptionLanguage ??
@@ -97,8 +97,8 @@ const createPrescription = async (
     doctor.prescriptionTemplate ??
     PrescriptionDesignTemplate.DEFAULT;
 
-  // BOLA/IDOR: the patient and chamber must belong to the active workspace,
-  // never trust client-supplied IDs at face value.
+  
+  
   const patient = await prisma.patient.findFirst({
     where: {
       id: prescriptionData.patientId,
@@ -117,10 +117,10 @@ const createPrescription = async (
   });
   const isPersonalWorkspace = workspace?.type === WorkspaceType.PERSONAL;
 
-  // Chamber resolution. A Personal-workspace prescription is not tied to a
-  // chamber (the form offers none), so a chamber is optional there. Chamber /
-  // institution prescriptions keep the existing behaviour: use the requested
-  // chamber, otherwise the workspace's first chamber.
+  
+  
+  
+  
   const chamber = prescriptionData.chamberId
     ? await prisma.chamber.findFirst({
         where: { id: prescriptionData.chamberId, workspaceId },
@@ -143,10 +143,10 @@ const createPrescription = async (
     );
   }
 
-  // ── Visit eligibility (Section: prescription eligibility) ──────────────────
-  // PERSONAL context is a free service (no appointment required). CHAMBER and
-  // INSTITUTION contexts require an eligible (PAID or FREE) appointment that
-  // belongs to this workspace, this patient and this doctor.
+  
+  
+  
+  
   if (!isPersonalWorkspace) {
     if (!prescriptionData.appointmentId) {
       throw createAppError(
@@ -199,12 +199,12 @@ const createPrescription = async (
   }
 
   return await prisma.$transaction(async (tx) => {
-    // 2. Create Prescription (without vital signs)
+    
     const prescription = await tx.prescription.create({
       data: {
         doctorUserId: userId,
         patientId: prescriptionData.patientId,
-        // Null for Personal-workspace prescriptions (no chamber required).
+        
         chamberId: chamber?.id ?? null,
         workspaceId: workspaceId,
         userId: userId,
@@ -212,7 +212,7 @@ const createPrescription = async (
         diagnosis: prescriptionData.diagnosis || null,
         clinicalNotes: prescriptionData.clinicalNotes || null,
         advises: prescriptionData.advises || null,
-        // History + On Examination (O/E) — all optional free text.
+        
         ...mapClinicalText(prescriptionData),
         nextVisitDate: prescriptionData.nextVisitDate
           ? new Date(prescriptionData.nextVisitDate)
@@ -224,7 +224,7 @@ const createPrescription = async (
       },
     });
 
-    // 2.5 Create Clinical Observation record (3NF: separate table for vitals)
+    
     if (
       prescriptionData.bloodPressure ||
       prescriptionData.pulse ||
@@ -250,7 +250,7 @@ const createPrescription = async (
       });
     }
 
-    // 3. Create relational medicines mapping
+    
     const medicineRelations = prescriptionData.medicines.map((med: any) =>
       mapMedicineRelation(prescription.id, med),
     );
@@ -259,10 +259,10 @@ const createPrescription = async (
       data: medicineRelations,
     });
 
-    // 3.5 Investigations (ordered). Optional — an empty list writes nothing.
+    
     await createInvestigations(tx, prescription.id, prescriptionData.investigations);
 
-    // 4. Update Medicine Favorites frequency metrics
+    
     for (const med of prescriptionData.medicines) {
       if (med.medicineId) {
         await tx.doctorFavoriteMedicine.upsert({
@@ -284,7 +284,7 @@ const createPrescription = async (
       }
     }
 
-    // Set compiled dynamic print-ready URL
+    
     const appUrl = config.appUrl || `http://localhost:${config.port}`;
     const printUrl = `${appUrl}/api/v1/prescription/${prescription.id}/print`;
 
@@ -295,7 +295,7 @@ const createPrescription = async (
       },
     });
 
-    // Log Audit Record
+    
     await AuditService.logAudit({
       userId,
       workspaceId,
@@ -322,8 +322,8 @@ const getPrescriptionById = async (
   workspaceId: string,
   scope?: RequestScope,
 ) => {
-  // Workspace-scoped lookup: an OWNER of one workspace must never read another
-  // workspace's prescription by guessing its ID (Section 6.4).
+  
+  
   const prescription = await prisma.prescription.findFirst({
     where: {
         id,
@@ -356,7 +356,7 @@ const updatePrescription = async (
   data: any,
   scope?: RequestScope,
 ) => {
-  // Check if user is verified to perform this action
+  
   await checkUserVerification(userId);
 
   const prescription = await prisma.prescription.findFirst({
@@ -380,8 +380,8 @@ const updatePrescription = async (
     );
   }
 
-  // Finalization must go through finalizePrescription so the verification
-  // gate, serial number and verification code are always applied (Section 13.3).
+  
+  
   if (data?.status === PrescriptionStatus.FINALIZED) {
     throw createAppError(
       "Use the finalize endpoint to finalize a prescription.",
@@ -392,11 +392,11 @@ const updatePrescription = async (
   }
 
   return await prisma.$transaction(async (tx) => {
-    // Separate fields that do NOT belong on the Prescription model: medicine
-    // lines live in PrescriptionMedicine and vitals live in ClinicalObservation.
+    
+    
     const {
       medicines,
-      // Relation, not a Prescription column — handled separately below.
+      
       investigations,
       status,
       bloodPressure,
@@ -409,7 +409,7 @@ const updatePrescription = async (
       ...rest
     } = data;
 
-    // 1. Update basic parameters.
+    
     const updateData: Record<string, unknown> = { ...rest };
     if (status !== undefined) updateData.status = status;
     if (nextVisitDate) {
@@ -421,8 +421,8 @@ const updatePrescription = async (
       data: updateData,
     });
 
-    // 1b. Vitals → ClinicalObservation (update the latest observation or
-    //     create one). Never pass these to the Prescription model.
+    
+    
     const hasVitals = [
       bloodPressure,
       pulse,
@@ -468,7 +468,7 @@ const updatePrescription = async (
       }
     }
 
-    // 2. Refresh relational medicine records if updated
+    
     if (medicines) {
       await tx.prescriptionMedicine.deleteMany({
         where: { prescriptionId: id },
@@ -483,7 +483,7 @@ const updatePrescription = async (
       });
     }
 
-    // 2b. Refresh the investigation list when the request includes one.
+    
     if (investigations) {
       await tx.prescriptionInvestigation.deleteMany({
         where: { prescriptionId: id },
@@ -491,7 +491,7 @@ const updatePrescription = async (
       await createInvestigations(tx, id, investigations);
     }
 
-    // Log Audit Record
+    
     await AuditService.logAudit({
       userId,
       workspaceId: prescription.workspaceId,
@@ -524,7 +524,7 @@ const deletePrescription = async (
   workspaceId: string,
   scope?: RequestScope,
 ) => {
-  // Check if user is verified to perform this action
+  
   await checkUserVerification(userId);
 
   const prescription = await prisma.prescription.findFirst({
@@ -548,7 +548,7 @@ const deletePrescription = async (
       },
     });
 
-    // Log Audit Record
+    
     await AuditService.logAudit({
       userId,
       workspaceId: prescription.workspaceId,
@@ -581,8 +581,8 @@ const getMyPrescriptions = async (
 ) => {
   const skip = (page - 1) * limit;
 
-  // Always scope to the active workspace so prescriptions never leak across
-  // workspaces (Section 6.4). A doctor additionally only sees their own.
+  
+  
   let query: any = {
     isDeleted: false,
     workspaceId,
@@ -590,7 +590,7 @@ const getMyPrescriptions = async (
   };
 
   if (workspaceType === WorkspaceType.PERSONAL) {
-    // Personal doctors must have a doctor profile
+    
     const doctor = await prisma.doctor.findUnique({
       where: { userId },
     });
@@ -599,9 +599,9 @@ const getMyPrescriptions = async (
     }
   }
 
-  // Filter criteria
-  // Apply the request scope: the current chamber/personal context, or every
-  // authorized workspace when All Workspaces was explicitly selected.
+  
+  
+  
   if (filters.scope) {
     Object.assign(query, scopeFilter(filters.scope));
   }
@@ -618,8 +618,8 @@ const getMyPrescriptions = async (
       include: {
         patient: { select: { name: true, phone: true } },
         chamber: { select: { name: true } },
-        // The list/edit UI needs the medicine lines; without them the builder
-        // would appear empty and saving could wipe existing medicines.
+        
+        
         prescriptionMedicines: true,
         clinicalObservations: true,
         investigations: { orderBy: { order: "asc" } },
@@ -645,8 +645,8 @@ const compileHtmlPrescription = async (
 ): Promise<string> => {
   const requireFinalized = options.requireFinalized !== false;
 
-  // Print/download are only permitted for finalized prescriptions (Section
-  // 13.3); an authenticated preview may render a draft.
+  
+  
   const prescription = await prisma.prescription.findFirst({
     where: {
       id,
@@ -657,12 +657,12 @@ const compileHtmlPrescription = async (
       prescriptionMedicines: true,
       clinicalObservations: true,
       investigations: { orderBy: { order: "asc" } },
-      doctor: true, // This is a User relation
+      doctor: true, 
       chamber: {
         include: { contactNumbers: true },
       },
-      // Personal prescriptions resolve their prescription settings (footer /
-      // watermark) from the workspace — there is no chamber in that context.
+      
+      
       workspace: { select: { templateConfig: true } },
       patient: true,
     },
@@ -675,22 +675,22 @@ const compileHtmlPrescription = async (
     );
   }
 
-  // Fetch doctor profile separately since Prescription relates to User, not Doctor
+  
   const doctorProfile = prescription.doctor
     ? await prisma.doctor.findUnique({
         where: { userId: prescription.doctor.id },
       })
     : null;
 
-  // Get latest clinical observation for vitals (3NF: from separate table)
+  
   const latestObservation =
     prescription.clinicalObservations &&
     prescription.clinicalObservations.length > 0
       ? prescription.clinicalObservations[0]
       : null;
 
-  // A finalized prescription carries a frozen branding snapshot so later
-  // doctor/chamber edits cannot rewrite an already-issued document.
+  
+  
   const snapshot = (prescription.renderSnapshot ?? null) as {
     doctor?: IPdfRenderData["doctor"];
     chamber?: IPdfRenderData["chamber"];
@@ -721,9 +721,9 @@ const compileHtmlPrescription = async (
       }
     : null;
 
-  // Resolve the prescription CONTEXT: a chamber prescription uses the chamber's
-  // settings; a personal prescription (no chamber) uses the workspace's personal
-  // prescription settings. The two never mix.
+  
+  
+  
   type PrescriptionSettings = {
     footerText?: string;
     watermarkEnabled?: boolean;
@@ -744,8 +744,8 @@ const compileHtmlPrescription = async (
     url: activeSettings.watermarkUrl || "",
   };
 
-  // A watermark is a plan-controlled entitlement: a plan that does not include
-  // it must not render one, even if it was configured while the plan did.
+  
+  
   const watermarkAllowed =
     configuredWatermark.enabled &&
     (await FeatureServices.isFeatureAllowed({
@@ -758,17 +758,17 @@ const compileHtmlPrescription = async (
     ? configuredWatermark
     : { enabled: false, text: "", url: "" };
 
-  // Public QR verification is a plan entitlement too — the QR is only drawn
-  // when the active plan includes it. (The public verification page itself
-  // stays reachable, so prescriptions already printed with a QR keep working;
-  // this gates GENERATION, which is what the entitlement controls.)
+  
+  
+  
+  
   const qrVerificationAllowed = await FeatureServices.isFeatureAllowed({
     userId: prescription.doctorUserId,
     workspaceId: prescription.workspaceId,
     featureKey: "qr_verification",
   });
 
-  // Structure render data matching IPdfRenderData interface
+  
   const renderData: IPdfRenderData = {
     id: prescription.id,
     serialNumber: prescription.serialNumber || "",
@@ -780,7 +780,7 @@ const compileHtmlPrescription = async (
     template: prescription.template,
     complaints: prescription.complaints,
     diagnosis: prescription.diagnosis,
-    // Vitals from ClinicalObservation table
+    
     bloodPressure: latestObservation
       ? latestObservation.bloodPressure || null
       : null,
@@ -796,7 +796,7 @@ const compileHtmlPrescription = async (
     clinicalNotes: prescription.clinicalNotes,
     advises: prescription.advises,
     nextVisitDate: prescription.nextVisitDate,
-    // History + On Examination findings and the ordered investigation list.
+    
     history: prescription.history,
     examRespiratoryRate: prescription.examRespiratoryRate,
     examLungs: prescription.examLungs,
@@ -810,13 +810,13 @@ const compileHtmlPrescription = async (
       testName: inv.testName,
       note: inv.note,
     })),
-    // ROOT CAUSE FIX: the renderer expects brandName/generic/strength/type but
-    // PrescriptionMedicine stores them as snapshot* columns. Normalise here so
-    // medicine names always reach the template.
+    
+    
+    
     medicines: prescription.prescriptionMedicines.map(toRenderMedicine),
     doctor: snapshot?.doctor ?? liveDoctor,
     chamber: snapshot?.chamber ?? liveChamber,
-    // Finalized prescriptions keep the footer/watermark they were issued with.
+    
     footerText: snapshot?.footerText ?? footerText,
     watermark: snapshot?.watermark ?? watermark,
     patient: {
@@ -838,11 +838,11 @@ const generateSerial = (workspaceId: string, seq: number): string => {
   return `PRS-${prefix}-${String(seq).padStart(6, "0")}`;
 };
 
-// Opaque, non-sequential public verification identifier (Section 15).
+
 const generateVerificationCode = (): string =>
   crypto.randomBytes(16).toString("base64url");
 
-/** Optional clinical free-text columns (Section 4.6): history + O/E findings. */
+
 const CLINICAL_TEXT_KEYS = [
   "history",
   "examRespiratoryRate",
@@ -855,11 +855,7 @@ const CLINICAL_TEXT_KEYS = [
   "examOthers",
 ] as const;
 
-/**
- * Maps the optional history / On Examination fields into a Prisma write payload.
- * Only keys actually present in the request are included, so a PATCH never
- * clears a field it did not receive.
- */
+
 const mapClinicalText = (data: Record<string, any>) => {
   const mapped: Record<string, string | null> = {};
   for (const key of CLINICAL_TEXT_KEYS) {
@@ -868,10 +864,7 @@ const mapClinicalText = (data: Record<string, any>) => {
   return mapped;
 };
 
-/**
- * Writes the ordered investigation list. Rows without a test name are dropped
- * (the name is the only required field) and an empty list writes nothing.
- */
+
 const createInvestigations = async (
   tx: any,
   prescriptionId: string,
@@ -893,11 +886,7 @@ const createInvestigations = async (
   }
 };
 
-/**
- * Maps an incoming medicine payload to a PrescriptionMedicine row. Shared by
- * create and update so both paths persist the same structured fields
- * (Section 13.1) — never duplicate this mapping.
- */
+
 const mapMedicineRelation = (prescriptionId: string, med: any) => ({
   prescriptionId,
   medicineId: med.medicineId || null,
@@ -927,12 +916,7 @@ const mapMedicineRelation = (prescriptionId: string, med: any) => ({
   customScheduleJson: med.customScheduleJson ?? null,
 });
 
-/**
- * Maps a stored PrescriptionMedicine row to the render shape the prescription
- * templates expect. PrescriptionMedicine persists medicine text in snapshot*
- * columns, while the renderer reads brandName/generic/strength/type — this is
- * the single place that bridges the two, shared by preview, print and PDF.
- */
+
 const toRenderMedicine = (m: any) => ({
   medicineId: m.medicineId,
   brandName: m.snapshotBrandName,
@@ -961,14 +945,14 @@ const toRenderMedicine = (m: any) => ({
   customScheduleJson: m.customScheduleJson,
 });
 
-// Finalize a draft prescription (locks it, assigns serial number)
+
 const finalizePrescription = async (
   prescriptionId: string,
   userId: string,
   workspaceId: string,
 ) => {
-  // Official prescription generation requires professional verification
-  // (Section 7.4). Unverified accounts may not finalize/lock a prescription.
+  
+  
   await checkUserVerification(userId);
 
   const existing = await prisma.prescription.findUnique({
@@ -1007,30 +991,30 @@ const finalizePrescription = async (
     );
   }
 
-  // Freeze the branding used on this document so later profile/chamber edits
-  // never rewrite an issued prescription (historical accuracy).
+  
+  
   const [creator, doctorProfile, chamber, workspace] = await Promise.all([
     prisma.user.findUnique({
       where: { id: existing.doctorUserId },
       select: { name: true },
     }),
     prisma.doctor.findUnique({ where: { userId: existing.doctorUserId } }),
-    // Personal-workspace prescriptions have no chamber.
+    
     existing.chamberId
       ? prisma.chamber.findUnique({
           where: { id: existing.chamberId },
           include: { contactNumbers: true },
         })
       : Promise.resolve(null),
-    // Personal prescription settings (footer / watermark) live on the workspace.
+    
     prisma.workspace.findUnique({
       where: { id: existing.workspaceId },
       select: { templateConfig: true },
     }),
   ]);
 
-  // Freeze the resolved footer + watermark too, so a later change to the
-  // personal/chamber prescription settings cannot rewrite an issued document.
+  
+  
   const frozenSettings = ((chamber?.templateConfig ??
     workspace?.templateConfig ??
     {}) as Record<string, unknown>) as {
@@ -1073,7 +1057,7 @@ const finalizePrescription = async (
     },
   };
 
-  // Assign serial number (unique). Retry on the rare concurrent-collision case.
+  
   let prescription: any = null;
   for (let attempt = 0; attempt < 3 && !prescription; attempt++) {
     try {
@@ -1114,7 +1098,7 @@ const finalizePrescription = async (
     );
   }
 
-  // Audit: Log finalization
+  
   await AuditService.logAudit({
     userId,
     workspaceId,
@@ -1141,8 +1125,8 @@ const logPrint = async (
   ipAddress?: string,
   userAgent?: string,
 ) => {
-  // Anonymous QR/print views have no authenticated user (and the print log has
-  // a FK to User), so only record prints made by an authenticated user.
+  
+  
   if (!userId) return;
 
   await prisma.prescriptionPrintLog.create({
@@ -1173,8 +1157,8 @@ const verifyPrescriptionPublic = async (identifier: string) => {
     chamber: { select: { id: true, name: true } },
   } as const;
 
-  // Prefer the opaque verification code; fall back to the legacy id so older
-  // QR codes keep working.
+  
+  
   const prescription =
     (await prisma.prescription.findFirst({
       where: { verificationCode: identifier, ...baseWhere },
@@ -1192,15 +1176,15 @@ const verifyPrescriptionPublic = async (identifier: string) => {
     );
   }
 
-  // BMDC lives on the Doctor profile, not the User record.
+  
   const doctorProfile = await prisma.doctor.findUnique({
     where: { userId: prescription.doctorUserId },
     select: { bmdcNumber: true },
   });
 
-  // Public endpoint: return only the minimum verification info.
-  // Never expose patient identity, contact/clinical data, or medicine details
-  // (Section 15).
+  
+  
+  
   return {
     verified: true,
     prescriptionId: prescription.id,
@@ -1213,11 +1197,7 @@ const verifyPrescriptionPublic = async (identifier: string) => {
   };
 };
 
-/**
- * Authenticated preview of the canonical print layout. Renders drafts as well
- * as finalized prescriptions so the browser preview and the printed output
- * share one renderer (Section 14.4).
- */
+
 const previewPrescription = async (
   id: string,
   workspaceId: string,
@@ -1239,11 +1219,7 @@ const previewPrescription = async (
   return compileHtmlPrescription(id, { requireFinalized: false });
 };
 
-/**
- * Correction after finalization (Section 13.4). The original finalized record
- * is never mutated — a new DRAFT version is created that supersedes it. The
- * original remains intact and auditable.
- */
+
 const amendPrescription = async (
   prescriptionId: string,
   userId: string,
@@ -1291,7 +1267,7 @@ const amendPrescription = async (
         diagnosis: original.diagnosis,
         clinicalNotes: original.clinicalNotes,
         advises: original.advises,
-        // History + On Examination carry over to the corrected revision.
+        
         history: original.history,
         examRespiratoryRate: original.examRespiratoryRate,
         examLungs: original.examLungs,
@@ -1358,7 +1334,7 @@ const amendPrescription = async (
       });
     }
 
-    // Carry the investigation list over to the corrected revision.
+    
     await createInvestigations(
       tx,
       created.id,
@@ -1388,8 +1364,8 @@ const amendPrescription = async (
     },
   });
 
-  // Return the revision with its copied medicine lines and vitals so the
-  // builder can open pre-populated (otherwise saving would wipe them).
+  
+  
   const fullRevision = await prisma.prescription.findUnique({
     where: { id: revision.id },
     include: {
@@ -1402,22 +1378,13 @@ const amendPrescription = async (
   return fullRevision ?? revision;
 };
 
-/**
- * Renders a realistic sample prescription for the given template + language so
- * the Settings template picker previews the EXACT same renderer used for real
- * prescriptions (never a divergent fake preview).
- */
+
 const previewTemplateSample = async (
   userId: string,
   workspaceId: string,
   template: PrescriptionDesignTemplate,
   language: PrescriptionLanguage,
-  /**
-   * The chamber the preview is being rendered for. When omitted the preview is
-   * the PERSONAL context and must resolve the workspace's personal-prescription
-   * settings — it must NOT silently borrow an unrelated chamber's branding,
-   * which is what made the Settings preview ignore the personal footer/watermark.
-   */
+  
   chamberId?: string | null,
 ): Promise<string> => {
   const [user, doctorProfile, chamber, workspace] = await Promise.all([
@@ -1429,17 +1396,17 @@ const previewTemplateSample = async (
           include: { contactNumbers: true },
         })
       : Promise.resolve(null),
-    // The personal-prescription settings (footer / watermark) live here.
+    
     prisma.workspace.findUnique({
       where: { id: workspaceId },
       select: { templateConfig: true },
     }),
   ]);
 
-  // Sample free-text content is provided in the selected language so the
-  // Settings preview demonstrates the full Bangla experience. (For real
-  // prescriptions the doctor writes the free text; only system values such as
-  // duration and dates are localised automatically.)
+  
+  
+  
+  
   const isBn = language === PrescriptionLanguage.BANGLA;
   const sample = isBn
     ? {
@@ -1462,11 +1429,11 @@ const previewTemplateSample = async (
         chronicDiseases: "None",
       };
 
-  // Resolve the SAME branding the real renderer uses. Without this the Settings
-  // live preview silently ignored the configured footer/watermark, which made
-  // the admin's plan toggle look ineffective — the preview is where the setting
-  // is actually judged. The watermark is gated through the same centralized
-  // entitlement resolution as the real render path (never hardcoded).
+  
+  
+  
+  
+  
   type BrandingSettings = {
     footerText?: string;
     watermarkEnabled?: boolean;
@@ -1497,7 +1464,7 @@ const previewTemplateSample = async (
     ? configuredWatermark
     : { enabled: false, text: "", url: "" };
 
-  // Same entitlement gate as the real render path.
+  
   const previewQrAllowed = await FeatureServices.isFeatureAllowed({
     userId,
     workspaceId,
@@ -1584,7 +1551,7 @@ const previewTemplateSample = async (
           chamberPhone: [{ phone: "+880 1700-000000" }],
         },
     patient: {
-      // Patient names are proper names and are never translated.
+      
       name: "Md. Rahim Uddin",
       age: 35,
       gender: "MALE",

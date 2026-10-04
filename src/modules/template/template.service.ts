@@ -10,10 +10,7 @@ type TemplateInput = {
   medicines: unknown[];
 };
 
-/**
- * Prescription templates (Section 13.6). A template is only ever *copied into*
- * a new prescription — editing a prescription never mutates the template.
- */
+
 const createTemplate = async (
   workspaceId: string,
   doctorUserId: string,

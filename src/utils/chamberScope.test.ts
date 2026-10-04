@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// The scope helpers only touch prisma for the membership lookup, so it is
-// mocked here — these tests prove the AUTHORIZATION BOUNDARY logic itself.
+
+
 const findMany = vi.fn();
 const findFirst = vi.fn();
 
@@ -85,7 +85,7 @@ describe("scopeFilter", () => {
   });
 
   it("all mode with an EMPTY authorized set matches nothing", () => {
-    // An empty set must never mean "unrestricted".
+    
     expect(scopeFilter(all([]))).toEqual({ workspaceId: { in: [] } });
   });
 });
@@ -147,7 +147,7 @@ describe("resolveRequestScope", () => {
     });
     expect(scope.mode).toBe("all");
     expect(scope.workspaceIds).toEqual([WS_A, WS_B]);
-    // The membership query must be filtered to ACTIVE memberships.
+    
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ userId: "user-1", status: "ACTIVE" }),

@@ -16,10 +16,7 @@ import {
   getSignedPrivateUrl,
 } from "../../config/cloudinary.config";
 
-/**
- * Uploads verification evidence to private storage and returns opaque
- * references (public id/format) — never a public URL (Section 21).
- */
+
 const uploadVerificationDocuments = async (files: Express.Multer.File[]) => {
   if (!files || files.length === 0) {
     throw createAppError(
@@ -53,11 +50,7 @@ const uploadVerificationDocuments = async (files: Express.Multer.File[]) => {
   return uploaded;
 };
 
-/**
- * Generates short-lived signed URLs for any private documents referenced in a
- * verification request's submitted data. Only returned to the owner or a
- * super admin.
- */
+
 const buildSignedDocuments = (submittedData: unknown) => {
   const docs = (submittedData as { documents?: unknown })?.documents;
   if (!Array.isArray(docs)) return undefined;
@@ -75,16 +68,14 @@ const buildSignedDocuments = (submittedData: unknown) => {
   }));
 };
 
-/**
- * Submit a verification request for doctor or institution
- */
+
 const submitVerificationRequest = async (
   userId: string,
   type: VerificationType,
   workspaceId: string,
   submittedData: Record<string, any>,
 ) => {
-  // The request must reference a workspace the user actually belongs to.
+  
   const membership = await prisma.membership.findUnique({
     where: { userId_workspaceId: { userId, workspaceId } },
     select: { status: true },
@@ -99,7 +90,7 @@ const submitVerificationRequest = async (
     );
   }
 
-  // Check if user is a doctor or institution
+  
   if (type === VerificationType.PERSONAL) {
     const doctor = await prisma.doctor.findUnique({
       where: { userId },
@@ -120,12 +111,12 @@ const submitVerificationRequest = async (
     }
   }
 
-  // Check if there's already an existing request
+  
   const existingRequest = await prisma.verificationRequest.findFirst({
     where: { userId, type },
   });
 
-  // Check if there's a pending request under review
+  
   if (
     existingRequest &&
     existingRequest.status === VerificationStatus.UNDER_REVIEW
@@ -139,7 +130,7 @@ const submitVerificationRequest = async (
   let verificationRequest;
 
   if (existingRequest) {
-    // Update existing request (re-submission / correction)
+    
     verificationRequest = await prisma.verificationRequest.update({
       where: { id: existingRequest.id },
       data: {
@@ -152,7 +143,7 @@ const submitVerificationRequest = async (
       },
     });
   } else {
-    // Create new request
+    
     verificationRequest = await prisma.verificationRequest.create({
       data: {
         userId,
@@ -164,7 +155,7 @@ const submitVerificationRequest = async (
     });
   }
 
-  // Reset the profile verification status so the request can be re-reviewed
+  
   if (type === VerificationType.PERSONAL) {
     await prisma.doctor.update({
       where: { userId },
@@ -177,13 +168,13 @@ const submitVerificationRequest = async (
     });
   }
 
-  // Update onboarding state
+  
   await prisma.user.update({
     where: { id: userId },
     data: { onboardingState: OnboardingState.VERIFICATION_SUBMITTED },
   });
 
-  // Audit: Log verification request submission
+  
   await AuditService.logAudit({
     userId,
     workspaceId,
@@ -202,9 +193,7 @@ const submitVerificationRequest = async (
   return verificationRequest;
 };
 
-/**
- * Get pending verification requests (admin only)
- */
+
 const getPendingRequests = async (type?: VerificationType) => {
   const requests = await prisma.verificationRequest.findMany({
     where: {
@@ -216,8 +205,8 @@ const getPendingRequests = async (type?: VerificationType) => {
     orderBy: { submittedAt: "asc" },
   });
 
-  // VerificationRequest.userId is a plain column (no Prisma relation), so the
-  // applicant identity is resolved separately for the admin queue.
+  
+  
   const userIds = [...new Set(requests.map((r) => r.userId))];
   const users = userIds.length
     ? await prisma.user.findMany({
@@ -230,9 +219,7 @@ const getPendingRequests = async (type?: VerificationType) => {
   return requests.map((r) => ({ ...r, user: userMap.get(r.userId) ?? null }));
 };
 
-/**
- * Get request details
- */
+
 const getRequestDetails = async (requestId: string) => {
   const request = await prisma.verificationRequest.findUnique({
     where: { id: requestId },
@@ -242,7 +229,7 @@ const getRequestDetails = async (requestId: string) => {
     throw createAppError("Verification request not found", Status.NOT_FOUND);
   }
 
-  // Get additional info based on type
+  
   if (request.type === VerificationType.PERSONAL) {
     const doctor = await prisma.doctor.findUnique({
       where: { userId: request.userId },
@@ -281,9 +268,7 @@ const getRequestDetails = async (requestId: string) => {
   }
 };
 
-/**
- * Move a verification request to UNDER_REVIEW (admin only)
- */
+
 const markUnderReview = async (requestId: string, reviewedByUserId: string) => {
   const request = await prisma.verificationRequest.findUnique({
     where: { id: requestId },
@@ -312,7 +297,7 @@ const markUnderReview = async (requestId: string, reviewedByUserId: string) => {
     },
   });
 
-  // Audit: Log status change
+  
   await AuditService.logAudit({
     userId: reviewedByUserId,
     workspaceId: request.workspaceId,
@@ -323,7 +308,7 @@ const markUnderReview = async (requestId: string, reviewedByUserId: string) => {
     newValues: { status: VerificationStatus.UNDER_REVIEW },
   });
 
-  // Notify the requester
+  
   await NotificationServices.createNotification({
     userId: request.userId,
     title: "Verification under review",
@@ -335,9 +320,7 @@ const markUnderReview = async (requestId: string, reviewedByUserId: string) => {
   return updated;
 };
 
-/**
- * Approve verification request
- */
+
 const approveRequest = async (requestId: string, reviewedByUserId: string) => {
   const request = await prisma.verificationRequest.findUnique({
     where: { id: requestId },
@@ -348,8 +331,8 @@ const approveRequest = async (requestId: string, reviewedByUserId: string) => {
     throw createAppError("Verification request not found", Status.NOT_FOUND);
   }
 
-  // State machine (Section 7.5): PENDING → UNDER_REVIEW → APPROVED.
-  // Approval is only valid from UNDER_REVIEW.
+  
+  
   if (request.status !== VerificationStatus.UNDER_REVIEW) {
     throw createAppError(
       "Only requests that are under review can be approved. Move the request to under review first.",
@@ -359,7 +342,7 @@ const approveRequest = async (requestId: string, reviewedByUserId: string) => {
     );
   }
 
-  // Update verification request
+  
   const updatedRequest = await prisma.$transaction(async (tx) => {
     const updated = await tx.verificationRequest.update({
       where: { id: requestId },
@@ -370,7 +353,7 @@ const approveRequest = async (requestId: string, reviewedByUserId: string) => {
       },
     });
 
-    // Update doctor or institution verification status
+    
     if (request.type === VerificationType.PERSONAL) {
       await tx.doctor.update({
         where: { userId: request.userId },
@@ -394,7 +377,7 @@ const approveRequest = async (requestId: string, reviewedByUserId: string) => {
     return updated;
   });
 
-  // Audit: Log approval
+  
   await AuditService.logAudit({
     userId: reviewedByUserId,
     workspaceId: request.workspaceId,
@@ -407,13 +390,13 @@ const approveRequest = async (requestId: string, reviewedByUserId: string) => {
     },
   });
 
-  // Update onboarding state
+  
   await prisma.user.update({
     where: { id: request.userId },
     data: { onboardingState: OnboardingState.VERIFICATION_APPROVED },
   });
 
-  // Notify the requester
+  
   await NotificationServices.createNotification({
     userId: request.userId,
     title: "Verification approved",
@@ -425,9 +408,7 @@ const approveRequest = async (requestId: string, reviewedByUserId: string) => {
   return updatedRequest;
 };
 
-/**
- * Reject verification request
- */
+
 const rejectRequest = async (
   requestId: string,
   reviewedByUserId: string,
@@ -442,7 +423,7 @@ const rejectRequest = async (
     throw createAppError("Verification request not found", Status.NOT_FOUND);
   }
 
-  // State machine (Section 7.5): only an UNDER_REVIEW request can be rejected.
+  
   if (request.status !== VerificationStatus.UNDER_REVIEW) {
     throw createAppError(
       "Only requests that are under review can be rejected. Move the request to under review first.",
@@ -452,7 +433,7 @@ const rejectRequest = async (
     );
   }
 
-  // Update verification request
+  
   const updatedRequest = await prisma.$transaction(async (tx) => {
     const updated = await tx.verificationRequest.update({
       where: { id: requestId },
@@ -464,7 +445,7 @@ const rejectRequest = async (
       },
     });
 
-    // Update doctor or institution verification status
+    
     if (request.type === VerificationType.PERSONAL) {
       await tx.doctor.update({
         where: { userId: request.userId },
@@ -488,7 +469,7 @@ const rejectRequest = async (
     return updated;
   });
 
-  // Audit: Log rejection
+  
   await AuditService.logAudit({
     userId: reviewedByUserId,
     workspaceId: request.workspaceId,
@@ -502,7 +483,7 @@ const rejectRequest = async (
     },
   });
 
-  // Notify the requester
+  
   await NotificationServices.createNotification({
     userId: request.userId,
     title: "Verification rejected",

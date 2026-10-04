@@ -9,14 +9,14 @@ import { publicVerifyLimiter } from "../../middleware/rateLimiter";
 
 const router = Router();
 
-// PUBLIC/ANONYMOUS ENDPOINTS (For QR Validation and Print view)
+
 router.get("/:id/print", publicVerifyLimiter, PrescriptionControllers.printPrescription);
 router.get("/:id/verify", publicVerifyLimiter, PrescriptionControllers.verifyPrescription);
 
-// AUTHENTICATED ENDPOINTS
+
 router.use(authOnly());
 
-// Create prescription (DOCTOR or OWNER in workspace)
+
 router.post(
   "/",
   authWorkspace([WorkspaceRole.DOCTOR, WorkspaceRole.OWNER]) as any,
@@ -25,7 +25,7 @@ router.post(
   PrescriptionControllers.createPrescription,
 );
 
-// Get workspace prescriptions (any workspace member)
+
 router.get(
   "/my-prescriptions",
   authWorkspace([
@@ -37,13 +37,13 @@ router.get(
   PrescriptionControllers.getMyPrescriptions,
 );
 
-// Settings: render a sample prescription for a DESIGN template + language.
-// Declared before "/:id" so it is not swallowed by the id route.
-//
-// Rendering a sample of the built-in designs IS the design-template feature
-// ("preview different prescription designs"), so it carries the
-// `prescription_design_templates` entitlement — not the language and not the
-// saved-templates entitlement.
+
+
+
+
+
+
+
 router.get(
   "/template-preview",
   authWorkspace([
@@ -60,7 +60,7 @@ router.get(
   PrescriptionControllers.previewTemplateSample,
 );
 
-// Authenticated A4 preview (draft or finalized) — canonical print layout
+
 router.get(
   "/:id/preview",
   authWorkspace(
@@ -75,7 +75,7 @@ router.get(
   PrescriptionControllers.previewPrescription,
 );
 
-// Get prescription by ID (prescription owner or OWNER in workspace)
+
 router.get(
   "/:id",
   authWorkspace(
@@ -90,7 +90,7 @@ router.get(
   PrescriptionControllers.getPrescriptionById,
 );
 
-// Update prescription (prescription owner or OWNER)
+
 router.patch(
   "/:id",
   authWorkspace([WorkspaceRole.DOCTOR, WorkspaceRole.OWNER], {
@@ -100,7 +100,7 @@ router.patch(
   PrescriptionControllers.updatePrescription,
 );
 
-// Finalize prescription (prescription owner or OWNER)
+
 router.post(
   "/:id/finalize",
   authWorkspace([WorkspaceRole.DOCTOR, WorkspaceRole.OWNER], {
@@ -109,7 +109,7 @@ router.post(
   PrescriptionControllers.finalizePrescription,
 );
 
-// Amend a finalized prescription by creating a corrected draft version
+
 router.post(
   "/:id/amend",
   authWorkspace([WorkspaceRole.DOCTOR, WorkspaceRole.OWNER], {
@@ -118,7 +118,7 @@ router.post(
   PrescriptionControllers.amendPrescription,
 );
 
-// Delete prescription (prescription owner or OWNER)
+
 router.delete(
   "/:id",
   authWorkspace([WorkspaceRole.DOCTOR, WorkspaceRole.OWNER], {

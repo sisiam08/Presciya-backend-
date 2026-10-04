@@ -8,14 +8,10 @@ import {
 import { AuditService } from "../audit/audit.service";
 import { checkUserVerification } from "../../utils/verificationCheck";
 
-/**
- * Assign a doctor to an institution
- */
 
 
-/**
- * Get all doctors assigned to an institution
- */
+
+
 const getInstitutionDoctors = async (institutionId: string) => {
   return await prisma.institutionDoctor.findMany({
     where: { institutionId },
@@ -46,9 +42,7 @@ const getInstitutionDoctors = async (institutionId: string) => {
   });
 };
 
-/**
- * Get institution doctor details
- */
+
 const getInstitutionDoctorDetails = async (institutionDoctorId: string) => {
   const institutionDoctor = await prisma.institutionDoctor.findUnique({
     where: { id: institutionDoctorId },
@@ -85,9 +79,7 @@ const getInstitutionDoctorDetails = async (institutionDoctorId: string) => {
   return institutionDoctor;
 };
 
-/**
- * Update doctor assignment (change department, toggle active status)
- */
+
 const updateDoctorAssignment = async (
   institutionDoctorId: string,
   userId: string,
@@ -96,7 +88,7 @@ const updateDoctorAssignment = async (
     isActive: boolean;
   }>,
 ) => {
-  // Verify user is verified
+  
   await checkUserVerification(userId);
 
   const institutionDoctor = await prisma.institutionDoctor.findUnique({
@@ -115,7 +107,7 @@ const updateDoctorAssignment = async (
     throw createAppError("Doctor assignment not found", Status.NOT_FOUND);
   }
 
-  // Verify user owns the institution
+  
   if (institutionDoctor.institution.userId !== userId) {
     throw createAppError(
       "You don't have permission to update this assignment",
@@ -123,7 +115,7 @@ const updateDoctorAssignment = async (
     );
   }
 
-  // Verify new department belongs to institution if changing department
+  
   if (data.departmentId !== undefined && data.departmentId !== null) {
     const department = await prisma.department.findUnique({
       where: {
@@ -140,13 +132,13 @@ const updateDoctorAssignment = async (
     }
   }
 
-  // Update assignment
+  
   const updated = await prisma.institutionDoctor.update({
     where: { id: institutionDoctorId },
     data,
   });
 
-  // Audit: Log update
+  
   await AuditService.logAudit({
     userId,
     actionType: AuditActionType.UPDATE,
@@ -166,14 +158,12 @@ const updateDoctorAssignment = async (
   return updated;
 };
 
-/**
- * Remove doctor from institution
- */
+
 const removeDoctorFromInstitution = async (
   institutionDoctorId: string,
   userId: string,
 ) => {
-  // Verify user is verified
+  
   await checkUserVerification(userId);
 
   const institutionDoctor = await prisma.institutionDoctor.findUnique({
@@ -192,7 +182,7 @@ const removeDoctorFromInstitution = async (
     throw createAppError("Doctor assignment not found", Status.NOT_FOUND);
   }
 
-  // Verify user owns the institution
+  
   if (institutionDoctor.institution.userId !== userId) {
     throw createAppError(
       "You don't have permission to remove this assignment",
@@ -200,7 +190,7 @@ const removeDoctorFromInstitution = async (
     );
   }
 
-  // Check if doctor has active assignments (chambers)
+  
   const activeAssignments = await prisma.doctorAssignment.count({
     where: { institutionDoctorId },
   });
@@ -212,12 +202,12 @@ const removeDoctorFromInstitution = async (
     );
   }
 
-  // Delete the assignment
+  
   const deleted = await prisma.institutionDoctor.delete({
     where: { id: institutionDoctorId },
   });
 
-  // Audit: Log removal
+  
   await AuditService.logAudit({
     userId,
     actionType: AuditActionType.DELETE,

@@ -8,7 +8,7 @@ import { upload } from "../../config/multer.config";
 
 const router = Router();
 
-// Assign doctor to workspace (OWNER only)
+
 router.post(
   "/",
   authWorkspace([WorkspaceRole.OWNER]) as any,
@@ -16,31 +16,31 @@ router.post(
   DoctorControllers.assignDoctor,
 );
 
-// Get own doctor profile (any authenticated user)
+
 router.get("/profile", authOnly(), DoctorControllers.getDoctorProfile);
 
-// Get workspace doctors (OWNER only)
+
 router.get(
   "/my-doctors",
   authWorkspace([WorkspaceRole.OWNER]) as any,
   DoctorControllers.getMyDoctors,
 );
 
-// Get all doctors (requires OWNER - platform level)
+
 router.get(
   "/",
   authWorkspace([WorkspaceRole.OWNER]) as any,
   DoctorControllers.getAllDoctors,
 );
 
-// Get doctor by ID (OWNER/DOCTOR in same workspace)
+
 router.get(
   "/:id",
   authWorkspace([WorkspaceRole.OWNER, WorkspaceRole.DOCTOR]) as any,
   DoctorControllers.getDoctorProfileById,
 );
 
-// Update own doctor profile (any authenticated user)
+
 router.patch(
   "/profile",
   authOnly(),

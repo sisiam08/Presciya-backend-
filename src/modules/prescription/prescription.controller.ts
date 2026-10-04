@@ -90,8 +90,8 @@ const getMyPrescriptions = catchAsync(async (req: Request, res: Response) => {
   const workspaceId = (req as any).workspaceId as string;
   const { patientPhone, page = 1, limit = 10 } = req.query;
 
-  // Chamber isolation: the current chamber (or the personal scope) is resolved
-  // and validated against the caller's workspace before the query runs.
+  
+  
   const scope = await resolveRequestScope(req.user?.id as string, workspaceId, req);
 
   const result = await PrescriptionServices.getMyPrescriptions(
@@ -136,14 +136,14 @@ const finalizePrescription = catchAsync(async (req: Request, res: Response) => {
 
 const printPrescription = catchAsync(async (req: Request, res: Response) => {
   const id = requireStringParam(req.params.id, "Prescription ID");
-  // Public route: an authenticated doctor may print (logged); anonymous QR
-  // viewers are allowed but not logged (print log has a User FK).
+  
+  
   const userId = req.user?.id;
 
-  // Render the A4 print ready HTML template
+  
   const html = await PrescriptionServices.compileHtmlPrescription(id);
 
-  // Log printing metric
+  
   const ipAddress = req.ip;
   const userAgent = req.headers["user-agent"];
   await PrescriptionServices.logPrint(id, userId, ipAddress, userAgent);
@@ -177,7 +177,7 @@ const previewPrescription = catchAsync(async (req: Request, res: Response) => {
   const id = requireStringParam(req.params.id, "Prescription ID");
   const workspaceId = (req as any).workspaceId as string;
 
-  // Canonical A4 layout (same renderer as print), authenticated & workspace-scoped.
+  
   const scope = await resolveRequestScope(req.user?.id as string, workspaceId, req);
   const html = await PrescriptionServices.previewPrescription(id, workspaceId, scope);
 
@@ -192,9 +192,9 @@ const previewTemplateSample = catchAsync(async (req: Request, res: Response) => 
   const language =
     (req.query.language as PrescriptionLanguage) ?? PrescriptionLanguage.ENGLISH;
 
-  // Honour the caller's active chamber, exactly like a real prescription: with
-  // a chamber the preview shows that chamber's branding, without one it shows
-  // the personal (workspace) prescription settings.
+  
+  
+  
   const chamberId = chamberIdFromRequest(req as any);
 
   const html = await PrescriptionServices.previewTemplateSample(

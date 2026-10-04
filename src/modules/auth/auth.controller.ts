@@ -6,11 +6,7 @@ import { Status } from "../../errors/httpStatus";
 import { createAppError } from "../../errors/appError";
 import config from "../../config";
 
-/**
- * Cookie attributes come from the validated configuration. Max-age always
- * matches the corresponding token lifetime, so a cookie can never outlive its
- * token.
- */
+
 const cookieBaseOptions = (): CookieOptions => ({
   secure: config.cookie.secure,
   sameSite: config.cookie.sameSite,
@@ -27,14 +23,14 @@ const setCookies = (
 
   res.cookie(config.cookie.accessName, accessToken, {
     ...base,
-    // Readable by the Next.js proxy, which verifies the token server-side.
+    
     httpOnly: false,
     maxAge: config.cookie.accessMaxAge,
   });
 
   res.cookie(config.cookie.refreshName, refreshToken, {
     ...base,
-    // Never exposed to browser JavaScript.
+    
     httpOnly: true,
     maxAge: config.cookie.refreshMaxAge,
   });
@@ -101,8 +97,8 @@ const switchWorkspace = catchAsync(async (req: Request, res: Response) => {
   const deviceInfo = req.headers["user-agent"];
   const ipAddress = req.ip;
 
-  // Identity MUST come exclusively from the verified access token (req.user),
-  // never from client-supplied body/query/params (prevents identity spoofing).
+  
+  
   const actingUserId = req.user?.id;
 
   if (!actingUserId) {

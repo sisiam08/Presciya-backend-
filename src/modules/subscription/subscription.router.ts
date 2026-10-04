@@ -7,10 +7,10 @@ import { WorkspaceRole } from "../../../generated/prisma/enums";
 
 const router = Router();
 
-// AUTHENTICATED ENDPOINTS
+
 router.use(authOnly());
 
-// All authenticated users can view available plans and check their own subscription
+
 router.get("/plans", SubscriptionControllers.getAvailablePlans);
 router.get(
   "/my-subscription",
@@ -39,7 +39,7 @@ router.get(
   SubscriptionControllers.getBillingHistory,
 );
 
-// Only workspace OWNER can manage subscription
+
 router.post(
   "/subscribe",
   authWorkspace([WorkspaceRole.OWNER]) as any,

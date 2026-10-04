@@ -6,10 +6,10 @@ import { SystemRole } from "../../../generated/prisma/enums";
 
 const router = Router();
 
-// Apply admin system-role guard to all routes
+
 router.use(authRole([SystemRole.SUPER_ADMIN]));
 
-// Users management
+
 router.get(
   "/users",
   requirePermission("manage_users"),
@@ -52,7 +52,7 @@ router.delete(
   },
 );
 
-// Plans and feature limits
+
 router.get(
   "/plans",
   async (req: Request, res: Response, next: NextFunction) => {
@@ -65,7 +65,7 @@ router.get(
   },
 );
 
-// Create a subscription plan (price/availability are admin-owned data)
+
 router.post(
   "/plans",
   requirePermission("manage_plans"),
@@ -79,8 +79,8 @@ router.post(
   },
 );
 
-// Edit a plan: name, price, prescription limit, description, active/inactive.
-// Historical subscription/payment records keep their own price snapshot.
+
+
 router.patch(
   "/plans/:variantId",
   requirePermission("manage_plans"),
@@ -95,7 +95,7 @@ router.patch(
   },
 );
 
-// Platform feature catalog (all toggles an admin can attach to a plan)
+
 router.get(
   "/features",
   async (req: Request, res: Response, next: NextFunction) => {
@@ -108,7 +108,7 @@ router.get(
   },
 );
 
-// Enable/disable a feature for a plan and set its limit (admin = source of truth)
+
 router.put(
   "/plans/:variantId/features/:featureId",
   requirePermission("manage_plans"),
@@ -141,7 +141,7 @@ router.post(
         variantId: string;
         featureId: string;
       };
-      const { limitValue } = req.body; // number | null
+      const { limitValue } = req.body; 
       const result = await adminService.setPlanFeatureLimit(
         variantId,
         featureId,
@@ -169,7 +169,7 @@ router.patch(
   },
 );
 
-// Audit log viewer
+
 router.get(
   "/audit-logs",
   requirePermission("manage_users"),
@@ -192,7 +192,7 @@ router.get(
   },
 );
 
-// Login history viewer
+
 router.get(
   "/login-history",
   requirePermission("manage_users"),
@@ -212,7 +212,7 @@ router.get(
   },
 );
 
-// Dashboard statistics
+
 router.get(
   "/stats",
   requirePermission("manage_users"),
@@ -226,7 +226,7 @@ router.get(
   },
 );
 
-// Workspace directory (platform-wide)
+
 router.get(
   "/workspaces",
   async (req: Request, res: Response, next: NextFunction) => {
@@ -239,7 +239,7 @@ router.get(
   },
 );
 
-// Medicine catalog (platform reference data)
+
 router.get(
   "/medicines",
   async (req: Request, res: Response, next: NextFunction) => {

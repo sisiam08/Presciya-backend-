@@ -1,6 +1,6 @@
-// Shared HTML escaping helpers for prescription templates. Every template
-// interpolates already-escaped values so a single escaping policy is enforced
-// in one place (Section 14.5).
+
+
+
 
 export const escapeHtml = (unsafe?: string | number | null): string => {
   if (unsafe === undefined || unsafe === null) return "";
@@ -30,8 +30,8 @@ export const escapeHtmlMultiline = (unsafe?: string | null): string => {
   return escapeHtml(unsafe).replace(/\n/g, "<br>");
 };
 
-// Only allow absolute http(s) URLs into rendered attributes. Prevents
-// javascript:/data: injection and unexpected resource loads (Section 14.5).
+
+
 export const safeUrl = (url?: string | null): string => {
   if (!url) return "";
   const trimmed = String(url).trim();
@@ -39,8 +39,8 @@ export const safeUrl = (url?: string | null): string => {
   return trimmed.replace(/"/g, "%22").replace(/'/g, "%27");
 };
 
-// Doctor names are frequently stored with the honorific already ("Dr. Osman").
-// Never render a doubled "Dr. Dr." prefix.
+
+
 export const formatDoctorName = (name?: string | null): string => {
   const raw = (name || "").trim();
   if (!raw) return "";

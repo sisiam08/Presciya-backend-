@@ -16,9 +16,9 @@ app.use(requestLogger);
 
 app.use(helmet());
 
-// CORS must run before the rate limiter so that a 429 (or any error) response
-// still carries CORS headers — otherwise the browser reports a misleading
-// "Network Error" and the client cannot read the real status.
+
+
+
 app.use(
   cors({
     origin: config.cors.origins,

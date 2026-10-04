@@ -2,11 +2,7 @@ import { describe, it, expect } from "vitest";
 import { formatDosage } from "./dosage";
 import { buildPrescriptionViewModel } from "./view-model";
 
-/**
- * The dosage rule previously lived in the frontend only, so the printed
- * document disagreed with the UI. It now has ONE implementation, shared by the
- * UI path and every template/PDF — these cases lock the exact contract.
- */
+
 describe("formatDosage — canonical presentation rule", () => {
   it("drops ONLY a trailing fourth position that is exactly 0", () => {
     expect(formatDosage("1+1+1+0")).toBe("1+1+1");

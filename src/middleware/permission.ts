@@ -17,7 +17,7 @@ export const requirePermission = (permissionKey: string) => {
         throw createAppError("Unauthorized", Status.UNAUTHORIZED);
       }
 
-      // System admins bypass workspace-level permission checks
+      
       if (systemRole === SystemRole.SUPER_ADMIN) {
         return next();
       }

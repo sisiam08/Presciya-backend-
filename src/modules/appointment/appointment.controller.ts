@@ -110,8 +110,8 @@ const updateStatus = catchAsync(async (req: Request, res: Response) => {
 const list = catchAsync(async (req: Request, res: Response) => {
   const workspaceId = (req as any).workspaceId as string;
   const { doctorId, patientId, from, to, date, page, limit } = req.query as any;
-  // Data scope: current chamber/personal, or all authorized workspaces when
-  // All Workspaces was explicitly selected.
+  
+  
   const scope = await resolveRequestScope(req.user?.id as string, workspaceId, req);
   const filters: any = { doctorId, patientId, date, scope };
   if (from) filters.from = new Date(from);

@@ -9,7 +9,7 @@ import { getPaginationParams, buildPaginatedResult } from "../../utils/paginatio
 import { createAppError } from "../../errors/appError";
 import { Status } from "../../errors/httpStatus";
 
-export const adminService = {  // User management
+export const adminService = {  
   async listUsers() {
     return prisma.user.findMany({
       select: {
@@ -37,10 +37,10 @@ export const adminService = {  // User management
     });
   },
 
-  // Soft delete / deactivate (Section 8.2). A hard delete is not allowed: the
-  // user owns workspaces and is referenced by prescriptions, profiles, etc., so
-  // we deactivate the account, revoke sessions and set memberships inactive —
-  // all business records are preserved.
+  
+  
+  
+  
   async deleteUser(id: string) {
     const user = await prisma.user.findUnique({
       where: { id },
@@ -69,12 +69,12 @@ export const adminService = {  // User management
     return { id, deactivated: true };
   },
 
-  // Subscription plan feature limits
+  
   async listPlans() {
     return prisma.subscriptionVariant.findMany({
-      // Canonical business order (Free → Personal → Clinic → Institute), then
-      // creation order for any admin-created extras. Never rely on insertion or
-      // alphabetical order in the UI.
+      
+      
+      
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       include: {
         planFeatures: {
@@ -84,10 +84,7 @@ export const adminService = {  // User management
     });
   },
 
-  /**
-   * Creates a subscription plan. Price and availability are admin-owned data —
-   * never hardcoded in the client. New plans are active unless told otherwise.
-   */
+  
   async createPlan(data: {
     variantName: string;
     price: number;
@@ -99,10 +96,10 @@ export const adminService = {  // User management
       throw createAppError("Plan name is required", Status.BAD_REQUEST);
     }
 
-    // Guard against an accidental duplicate. Renaming an existing plan is an
-    // UPDATE (`PATCH /admin/plans/:id`) and must never reach this path; if a
-    // name already exists we fail loudly instead of silently creating a second
-    // plan with the same display name.
+    
+    
+    
+    
     const nameTaken = await prisma.subscriptionVariant.findFirst({
       where: {
         variantName: { equals: data.variantName.trim(), mode: "insensitive" },
@@ -127,11 +124,7 @@ export const adminService = {  // User management
     });
   },
 
-  /**
-   * Updates a plan's name, price, prescription limit, description and/or
-   * active state. Historical subscription/payment rows keep their own snapshot
-   * of the price they were sold at, so editing here never rewrites them.
-   */
+  
   async updatePlan(
     variantId: string,
     data: {
@@ -157,9 +150,9 @@ export const adminService = {  // User management
         throw createAppError("Plan name cannot be empty", Status.BAD_REQUEST);
       }
       const nextName = String(data.variantName).trim();
-      // Renaming is safe: identity is the immutable `key`/`id`, so a rename can
-      // never detach the plan from its subscriptions or entitlements. The only
-      // thing to prevent is colliding with ANOTHER plan's display name.
+      
+      
+      
       const clash = await prisma.subscriptionVariant.findFirst({
         where: {
           variantName: { equals: nextName, mode: "insensitive" },
@@ -193,7 +186,7 @@ export const adminService = {  // User management
     featureId: string,
     limitValue: number | null,
   ) {
-    // Upsert PlanFeature
+    
     return prisma.planFeature.upsert({
       where: { variantId_featureId: { variantId, featureId } },
       update: { limitValue },
@@ -201,10 +194,7 @@ export const adminService = {  // User management
     });
   },
 
-  /**
-   * All platform features (the toggles an admin can attach to a plan) plus
-   * their current global availability flag.
-   */
+  
   async listFeatures() {
     return prisma.feature.findMany({
       include: { featureFlags: { select: { isEnabledGlobally: true } } },
@@ -212,12 +202,7 @@ export const adminService = {  // User management
     });
   },
 
-  /**
-   * Enables/disables a feature for a plan and sets its limit when enabled.
-   * The presence of a PlanFeature row means "enabled"; `limitValue = null`
-   * means "unlimited". There are no hardcoded plan names — this is the single
-   * source of truth for what a plan allows.
-   */
+  
   async setPlanFeature(
     variantId: string,
     featureId: string,
@@ -245,7 +230,7 @@ export const adminService = {  // User management
     });
   },
 
-  // Audit trail viewer
+  
   async listAuditLogs(query: {
     page?: unknown;
     limit?: unknown;
@@ -279,7 +264,7 @@ export const adminService = {  // User management
     return buildPaginatedResult(items, total, page, limit);
   },
 
-  // Login history viewer
+  
   async listLoginHistory(query: {
     page?: unknown;
     limit?: unknown;
@@ -308,7 +293,7 @@ export const adminService = {  // User management
     return buildPaginatedResult(items, total, page, limit);
   },
 
-  // Admin dashboard statistics
+  
   async getDashboardStats() {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -397,7 +382,7 @@ export const adminService = {  // User management
     };
   },
 
-  // Platform-wide workspace directory (super admin only)
+  
   async listWorkspaces() {
     return prisma.workspace.findMany({
       orderBy: { createdAt: "desc" },
@@ -415,7 +400,7 @@ export const adminService = {  // User management
     });
   },
 
-  // Medicine catalog management (platform reference data, not workspace-scoped)
+  
   async listMedicines(query: {
     q?: string | undefined;
     page?: unknown;
@@ -472,7 +457,7 @@ export const adminService = {  // User management
       data.slug?.trim() ||
       `${slugify(brandName)}-${slugify(data.strength || generic)}`;
 
-    // Ensure a unique slug
+    
     let slug = baseSlug;
     let suffix = 1;
     while (await prisma.medicine.findUnique({ where: { slug } })) {

@@ -11,11 +11,11 @@ const StructuredMedicineSchema = z.object({
   strength: z.string().optional(),
   type: z.string().min(1, "Medicine type (e.g. tablet, capsule) is required"),
   usageType: z.enum(["DAILY", "TOPICAL", "WEEKLY", "CUSTOM"]),
-  dosagePattern: z.string().optional(), // e.g. "1+0+1" - context-specific dosage
-  frequency: z.string().optional(), // e.g. "3 times daily"
-  intervalDays: z.number().int().optional(), // For weekly
-  duration: z.string().min(1, "Duration is required"), // e.g. "7 days" - required
-  quantity: z.number().int().optional(), // Number of units
+  dosagePattern: z.string().optional(), 
+  frequency: z.string().optional(), 
+  intervalDays: z.number().int().optional(), 
+  duration: z.string().min(1, "Duration is required"), 
+  quantity: z.number().int().optional(), 
   mealTiming: z
     .enum([
       "BEFORE_MEAL",
@@ -25,9 +25,9 @@ const StructuredMedicineSchema = z.object({
       "EMPTY_STOMACH",
     ])
     .optional(),
-  instruction: z.string().optional(), // e.g. "খাবারের ১০ মিনিট আগে খাবেন"
+  instruction: z.string().optional(), 
   notes: z.string().optional(),
-  // Structured instruction fields (Section 13.1)
+  
   dose: z.string().optional(),
   frequencyMorning: z.number().int().min(0).optional(),
   frequencyNoon: z.number().int().min(0).optional(),
@@ -41,16 +41,13 @@ const StructuredMedicineSchema = z.object({
   customScheduleJson: z.record(z.string(), z.any()).optional(),
 });
 
-/** One requested test. Only the test name is required. */
+
 const InvestigationSchema = z.object({
   testName: z.string().min(1, "Test name is required"),
   note: z.string().optional(),
 });
 
-/**
- * Optional clinical free-text: past history and the On Examination findings.
- * Free text on purpose — doctors write varied shorthand ("Nil", "+", "Mild").
- */
+
 const clinicalTextFields = {
   history: z.string().optional(),
   examRespiratoryRate: z.string().optional(),
@@ -66,32 +63,32 @@ const clinicalTextFields = {
 const createPrescriptionSchema = z.object({
   body: z.object({
     patientId: z.string().uuid("Invalid Patient ID"),
-    // Optional: chamber workspaces have no separate chamber row; the service
-    // falls back to the workspace's first chamber.
+    
+    
     chamberId: z.string().uuid("Invalid Chamber ID").optional(),
     complaints: z.string().optional(),
     diagnosis: z.string().optional(),
-    // Clinical Vitals (moved to ClinicalObservation table)
-    bloodPressure: z.string().optional(), // e.g., "120/80"
-    pulse: z.string().optional(), // beats per minute
-    temperature: z.string().optional(), // in Celsius
-    weight: z.number().optional(), // in kg
-    height: z.string().optional(), // e.g., "170 cm"
-    respiratoryRate: z.number().int().optional(), // breaths per minute
+    
+    bloodPressure: z.string().optional(), 
+    pulse: z.string().optional(), 
+    temperature: z.string().optional(), 
+    weight: z.number().optional(), 
+    height: z.string().optional(), 
+    respiratoryRate: z.number().int().optional(), 
     clinicalNotes: z.string().optional(),
     advises: z.string().optional(),
-    nextVisitDate: z.string().optional(), // YYYY-MM-DD
+    nextVisitDate: z.string().optional(), 
     ...clinicalTextFields,
-    // Ordered list of requested tests (optional, repeatable).
+    
     investigations: z.array(InvestigationSchema).optional(),
     medicines: z
       .array(StructuredMedicineSchema)
       .min(1, "At least one medicine is required"),
     status: z.enum(["DRAFT", "FINALIZED", "CANCELLED"]).optional(),
-    // Rendering choices. Never trust arbitrary strings — only known enum values.
+    
     language: z.nativeEnum(PrescriptionLanguage).optional(),
     template: z.nativeEnum(PrescriptionDesignTemplate).optional(),
-    // The eligible visit (required in chamber/institution context).
+    
     appointmentId: z.string().uuid().optional(),
   }),
 });
@@ -101,7 +98,7 @@ const updatePrescriptionSchema = z.object({
     chamberId: z.string().uuid().optional(),
     complaints: z.string().optional(),
     diagnosis: z.string().optional(),
-    // Clinical Vitals (moved to ClinicalObservation table)
+    
     bloodPressure: z.string().optional(),
     pulse: z.string().optional(),
     temperature: z.string().optional(),
@@ -112,7 +109,7 @@ const updatePrescriptionSchema = z.object({
     advises: z.string().optional(),
     nextVisitDate: z.string().optional(),
     ...clinicalTextFields,
-    // When provided, replaces the prescription's investigation list.
+    
     investigations: z.array(InvestigationSchema).optional(),
     medicines: z.array(StructuredMedicineSchema).optional(),
     status: z.enum(["DRAFT", "FINALIZED", "CANCELLED"]).optional(),
@@ -121,7 +118,7 @@ const updatePrescriptionSchema = z.object({
   }),
 });
 
-// Settings template picker: render a sample for a specific template + language.
+
 const previewTemplateSampleSchema = z.object({
   query: z.object({
     template: z.nativeEnum(PrescriptionDesignTemplate),

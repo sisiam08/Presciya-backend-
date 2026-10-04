@@ -33,13 +33,7 @@ type BrandingInput = {
   showLogo?: boolean;
 };
 
-/**
- * The institution profile is spread across two tables:
- *  - `Institution` holds legal/registration data (name, tradeLicenseNo, website, description)
- *  - `Workspace` holds contact/location/branding-adjacent display data
- *    (address, phone, email, slogan, logo)
- * This helper maps a flat API payload onto both tables.
- */
+
 const splitProfileData = (data: InstitutionProfileInput) => {
   const institutionData: Record<string, unknown> = {};
   const workspaceData: Record<string, unknown> = {};
@@ -61,7 +55,7 @@ const splitProfileData = (data: InstitutionProfileInput) => {
 
   if (data.address !== undefined) workspaceData.address = data.address;
     if (data.phone !== undefined) {
-      // Canonical domestic form (+8801712345678 -> 01712345678).
+      
       workspaceData.phone = data.phone
         ? normalizeBangladeshPhone(data.phone)
         : data.phone;
@@ -73,9 +67,7 @@ const splitProfileData = (data: InstitutionProfileInput) => {
   return { institutionData, workspaceData };
 };
 
-/**
- * Builds the flat profile shape the frontend consumes from the two records.
- */
+
 const buildProfileResponse = (
   institution: Record<string, any>,
   workspace: Record<string, any> | null,
@@ -145,11 +137,7 @@ const createInstitution = async (
   });
 };
 
-/**
- * Creates (or updates) the institution profile and ensures a verification
- * request exists. Institution accounts get a placeholder `Institution` row at
- * signup, so this endpoint must be idempotent rather than always creating.
- */
+
 const createInstitutionWithVerification = async (
   workspaceId: string,
   data: InstitutionProfileInput & { name: string },
@@ -270,11 +258,7 @@ const updateInstitution = async (
   return buildProfileResponse(updatedInstitution, updatedWorkspace);
 };
 
-/**
- * Persists the six documented branding fields (Section 10.1). These are the
- * only fields this endpoint writes — profile data such as description,
- * website or tradeLicense is updated via PATCH /institution/profile.
- */
+
 const updateBranding = async (workspaceId: string, brandingConfig: BrandingInput) => {
   const workspace = await getWorkspaceOrThrow(workspaceId);
 
@@ -329,7 +313,7 @@ const createDepartment = async (
     throw createAppError("Institution profile not found", Status.NOT_FOUND);
   }
 
-  // Single shared write path with the standalone /departments module.
+  
   return await DepartmentServices.createDepartmentForInstitution(
     inst.id,
     departmentData,
@@ -372,8 +356,8 @@ const assignDoctor = async (
     throw createAppError("Institution profile not found", Status.NOT_FOUND);
   }
 
-  // Invite-by-email path: works for both existing and brand-new doctors and
-  // never creates a duplicate User (Section 8.1).
+  
+  
   if (!doctorData.doctorId && doctorData.email) {
     return await invitationService.inviteUser(
       workspaceId,

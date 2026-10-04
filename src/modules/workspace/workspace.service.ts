@@ -22,7 +22,7 @@ import {
   hasWatermarkConfig,
 } from "../../utils/branding";
 
-// Generate URL-friendly slug
+
 const generateSlug = (name: string): string => {
   return name
     .toLowerCase()
@@ -31,7 +31,7 @@ const generateSlug = (name: string): string => {
     .replace(/^-+|-+$/g, "");
 };
 
-// Create personal workspace during signup
+
 const createPersonalWorkspace = async (
   userId: string,
   doctorName: string,
@@ -64,7 +64,7 @@ const createPersonalWorkspace = async (
     },
   })) as any;
 
-  // Audit: Log workspace creation
+  
   await AuditService.logAudit({
     userId,
     workspaceId: workspace.id,
@@ -85,7 +85,7 @@ const createPersonalWorkspace = async (
   return workspace;
 };
 
-// Create institution workspace during signup
+
 const createInstitutionWorkspace = async (
   userId: string,
   institutionName: string,
@@ -118,7 +118,7 @@ const createInstitutionWorkspace = async (
     },
   })) as any;
 
-  // Audit: Log workspace creation
+  
   await AuditService.logAudit({
     userId,
     workspaceId: workspace.id,
@@ -139,7 +139,7 @@ const createInstitutionWorkspace = async (
   return workspace;
 };
 
-// Create a new workspace (any verified user can create)
+
 const createWorkspace = async (
   userId: string,
   name: string,
@@ -189,7 +189,7 @@ const createWorkspace = async (
     },
   })) as any;
 
-  // Audit: Log workspace creation
+  
   await AuditService.logAudit({
     userId,
     workspaceId: workspace.id,
@@ -210,7 +210,7 @@ const createWorkspace = async (
   return workspace;
 };
 
-// Update workspace (owner only)
+
 const updateWorkspace = async (
   workspaceId: string,
   userId: string,
@@ -218,7 +218,7 @@ const updateWorkspace = async (
     name?: string;
     logo?: string;
     slogan?: string | null;
-    /** Personal-prescription settings: { footerText, watermarkEnabled, ... }. */
+    
     templateConfig?: Record<string, unknown> | null;
   },
 ): Promise<IWorkspaceResponseDTO> => {
@@ -257,10 +257,10 @@ const updateWorkspace = async (
   if (data.logo !== undefined) updateData.logo = data.logo;
   if (data.slogan !== undefined) updateData.slogan = data.slogan;
 
-  // Personal-prescription settings are premium, admin-configurable features.
-  // Footer text and watermark are SEPARATE entitlements, and each is only
-  // enforced when the payload actually writes that part — so saving unrelated
-  // settings never fails with a late entitlement error.
+  
+  
+  
+  
   if (data.templateConfig !== undefined) {
     const config = data.templateConfig as TemplateConfigLike | null;
 
@@ -302,7 +302,7 @@ const updateWorkspace = async (
     },
   })) as any;
 
-  // Audit: Log workspace update
+  
   await AuditService.logAudit({
     userId,
     workspaceId,
@@ -319,8 +319,8 @@ const updateWorkspace = async (
   return updated;
 };
 
-// Delete workspace (owner only). Only allowed when workspace has no
-// prescriptions, chambers, or patients (otherwise archiving is required).
+
+
 const deleteWorkspace = async (
   workspaceId: string,
   userId: string,
@@ -362,7 +362,7 @@ const deleteWorkspace = async (
     prisma.workspace.delete({ where: { id: workspaceId } }),
   ]);
 
-  // Audit: Log workspace deletion
+  
   await AuditService.logAudit({
     userId,
     workspaceId,
@@ -376,7 +376,7 @@ const deleteWorkspace = async (
   });
 };
 
-// Get workspace detail
+
 const getWorkspace = async (
   workspaceId: string,
   userId?: string,
@@ -397,7 +397,7 @@ const getWorkspace = async (
     throw createAppError("Workspace not found", Status.NOT_FOUND);
   }
 
-  // Report the caller's real role, never a hardcoded OWNER.
+  
   let callerRole: WorkspaceRole = WorkspaceRole.OWNER;
   if (userId) {
     const membership = await prisma.membership.findUnique({
@@ -434,12 +434,12 @@ const getWorkspace = async (
   };
 };
 
-// Get all user workspaces
+
 const getUserWorkspaces = async (userId: string): Promise<any[]> => {
   const memberships = await prisma.membership.findMany({
     where: {
       userId,
-      // Only ACTIVE memberships are selectable (Section 5.3).
+      
       status: MembershipStatus.ACTIVE,
     },
     include: {
@@ -465,7 +465,7 @@ const getUserWorkspaces = async (userId: string): Promise<any[]> => {
   }));
 };
 
-// Get workspace members
+
 const getWorkspaceMembers = async (workspaceId: string): Promise<any[]> => {
   return await prisma.membership.findMany({
     where: {
@@ -485,14 +485,14 @@ const getWorkspaceMembers = async (workspaceId: string): Promise<any[]> => {
   });
 };
 
-// Update member role
+
 const updateMemberRole = async (
   workspaceId: string,
   memberId: string,
   newRole: WorkspaceRole,
   updatedByUserId?: string,
 ): Promise<any> => {
-  // Check if the user performing the action is verified
+  
   if (updatedByUserId) {
     await checkUserVerification(updatedByUserId);
   }
@@ -525,7 +525,7 @@ const updateMemberRole = async (
     },
   });
 
-  // Audit: Log role change
+  
   await AuditService.logAudit({
     userId: updatedByUserId,
     workspaceId,
@@ -547,13 +547,13 @@ const updateMemberRole = async (
   return updated;
 };
 
-// Remove member
+
 const removeMember = async (
   workspaceId: string,
   memberId: string,
   removedByUserId?: string,
 ): Promise<void> => {
-  // Check if the user performing the action is verified
+  
   if (removedByUserId) {
     await checkUserVerification(removedByUserId);
   }
@@ -580,7 +580,7 @@ const removeMember = async (
 
   await prisma.membership.delete({ where: { id: memberId } });
 
-  // Audit: Log member removal
+  
   await AuditService.logAudit({
     userId: removedByUserId,
     workspaceId,
@@ -599,7 +599,7 @@ const removeMember = async (
   });
 };
 
-// Suspend or restore membership status
+
 const updateMembershipStatus = async (
   workspaceId: string,
   memberId: string,
@@ -647,7 +647,7 @@ const updateMembershipStatus = async (
       ? AuditActionType.SUSPEND
       : AuditActionType.RESTORE;
 
-  // Audit: Log membership status change
+  
   await AuditService.logAudit({
     userId: updatedByUserId,
     workspaceId,
@@ -665,7 +665,7 @@ const updateMembershipStatus = async (
   return updated;
 };
 
-// Check membership exists and is active
+
 const checkMembership = async (
   userId: string,
   workspaceId: string,

@@ -4,9 +4,9 @@ import {
   PaymentMethod,
 } from "../../../generated/prisma/enums";
 
-// Amount is accepted as a number or string and normalised to a decimal string.
-// Never coerced to a float — the service hands the string straight to Prisma's
-// Decimal column so precision is preserved.
+
+
+
 const amountSchema = z
   .union([z.number(), z.string()])
   .transform((v) => String(v).trim())
@@ -30,8 +30,8 @@ const groupBySchema = z.enum(["day", "week", "month", "year"]);
 const optionalUuid = z.string().uuid().optional();
 const nullableUuid = z.string().uuid().nullable().optional();
 
-// No `createTransactionSchema`: manual transaction creation was removed (see
-// finance.router.ts). `updateTransactionSchema` below still governs corrections.
+
+
 
 const updateTransactionSchema = z.object({
   body: z.object({

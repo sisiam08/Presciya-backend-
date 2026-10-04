@@ -6,10 +6,7 @@ import { createAppError } from "../../errors/appError";
 import { Status } from "../../errors/httpStatus";
 import { AuthenticatedRequest } from "../../middleware/auth";
 
-/**
- * Create a new department
- * POST /api/departments
- */
+
 export const createDepartment = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id;
@@ -45,10 +42,7 @@ export const createDepartment = catchAsync(
   },
 );
 
-/**
- * Get all departments for an institution
- * GET /api/departments/:institutionId
- */
+
 export const getDepartmentsByInstitution = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { institutionId } = req.params as { institutionId: string };
@@ -69,10 +63,7 @@ export const getDepartmentsByInstitution = catchAsync(
   },
 );
 
-/**
- * Get department details
- * GET /api/departments/:id
- */
+
 export const getDepartmentDetails = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const { id } = req.params as { id: string };
@@ -92,10 +83,7 @@ export const getDepartmentDetails = catchAsync(
   },
 );
 
-/**
- * Update department
- * PUT /api/departments/:id
- */
+
 export const updateDepartment = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id;
@@ -136,10 +124,7 @@ export const updateDepartment = catchAsync(
   },
 );
 
-/**
- * Delete department
- * DELETE /api/departments/:id
- */
+
 export const deleteDepartment = catchAsync(
   async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user?.id;

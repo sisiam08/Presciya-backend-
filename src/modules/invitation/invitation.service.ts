@@ -17,7 +17,7 @@ import config from "../../config";
 
 const INVITATION_EXPIRY_DAYS = config.invitationExpiryDays;
 
-// Generate secure random token
+
 const generateToken = (): string => {
   return crypto.randomBytes(32).toString("hex");
 };
@@ -112,7 +112,7 @@ const inviteUser = async (
     }
   }
 
-  // Check if user already has a membership in this workspace
+  
   const existingMembership = await prisma.membership.findUnique({
     where: {
       userId_workspaceId: {
@@ -135,8 +135,8 @@ const inviteUser = async (
       );
     }
 
-    // INACTIVE / SUSPENDED membership: re-invite by resetting it to PENDING
-    // rather than creating a duplicate row (unique userId+workspaceId).
+    
+    
     await prisma.membership.update({
       where: { id: existingMembership.id },
       data: { role, status: MembershipStatus.PENDING },
@@ -169,7 +169,7 @@ const inviteUser = async (
     },
   });
 
-  // Send invitation email with optional credentials
+  
   try {
     await sendInvitationEmail(
       email,
@@ -190,7 +190,7 @@ const inviteUser = async (
     );
   }
 
-  // Audit: Log invitation sent
+  
   await AuditService.logAudit({
     userId: invitedByUserId,
     workspaceId,
@@ -210,7 +210,7 @@ const inviteUser = async (
     },
   });
 
-  // Notify the invitee in-app
+  
   try {
     await NotificationServices.createNotification({
       userId: existingUser.id,
@@ -343,7 +343,7 @@ const acceptInvitation = async (
     return updated;
   });
 
-  // Audit: Log invitation acceptance
+  
   await AuditService.logAudit({
     userId,
     workspaceId: invitation.workspaceId,
@@ -364,7 +364,7 @@ const acceptInvitation = async (
     },
   });
 
-  // Notify the inviter in-app
+  
   if (invitation.invitedById) {
     try {
       await NotificationServices.createNotification({
@@ -381,7 +381,7 @@ const acceptInvitation = async (
   return membership;
 };
 
-// Reject invitation
+
 const rejectInvitation = async (
   token: string,
   userId?: string,
@@ -408,7 +408,7 @@ const rejectInvitation = async (
       data: { rejectedAt: new Date() },
     });
 
-    // Release the pending membership so the workspace can re-invite later.
+    
     const invitee = await tx.user.findUnique({
       where: { email: invitation.email },
       select: { id: true },
@@ -425,7 +425,7 @@ const rejectInvitation = async (
     }
   });
 
-  // Audit: Log invitation rejection
+  
   await AuditService.logAudit({
     userId,
     workspaceId: invitation.workspaceId,
@@ -441,7 +441,7 @@ const rejectInvitation = async (
     },
   });
 
-  // Notify the inviter in-app
+  
   if (invitation.invitedById) {
     try {
       await NotificationServices.createNotification({
@@ -456,7 +456,7 @@ const rejectInvitation = async (
   }
 };
 
-// Get pending invitations for user
+
 const getPendingInvitations = async (email: string): Promise<any[]> => {
   return await prisma.invitation.findMany({
     where: {
@@ -477,7 +477,7 @@ const getPendingInvitations = async (email: string): Promise<any[]> => {
   });
 };
 
-// Get invitations sent by workspace admin
+
 const getWorkspaceInvitations = async (workspaceId: string): Promise<any[]> => {
   return await prisma.invitation.findMany({
     where: { workspaceId },
@@ -490,7 +490,7 @@ const getWorkspaceInvitations = async (workspaceId: string): Promise<any[]> => {
   });
 };
 
-// Cancel invitation (by sender)
+
 const cancelInvitation = async (
   invitationId: string,
   workspaceId: string,
@@ -516,7 +516,7 @@ const cancelInvitation = async (
       where: { id: invitationId },
     });
 
-    // Release the pending membership so the workspace can re-invite later.
+    
     const invitee = await tx.user.findUnique({
       where: { email: invitation.email },
       select: { id: true },
@@ -533,7 +533,7 @@ const cancelInvitation = async (
     }
   });
 
-  // Audit: Log invitation cancellation
+  
   await AuditService.logAudit({
     userId: cancelledByUserId,
     workspaceId,
@@ -551,7 +551,7 @@ const cancelInvitation = async (
   });
 };
 
-// Verify invitation token exists and is valid
+
 const verifyInvitationToken = async (token: string): Promise<any> => {
   const invitation = await prisma.invitation.findUnique({
     where: { token },

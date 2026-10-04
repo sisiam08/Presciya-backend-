@@ -169,7 +169,7 @@ const removeOverride = async (
   });
 };
 
-/** Effective percentage for a doctor: override → workspace default → 0. */
+
 const resolveSharePercent = async (
   workspaceId: string,
   doctorId: string,

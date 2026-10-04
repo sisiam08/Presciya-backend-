@@ -14,7 +14,7 @@ export interface IUpdateDoctorProfile {
   registrationNo?: string;
   signature?: string;
   signatureUrl?: string;
-  // Prescription rendering defaults (Settings → Prescription).
+  
   prescriptionLanguage?: PrescriptionLanguage;
   prescriptionTemplate?: PrescriptionDesignTemplate;
 }

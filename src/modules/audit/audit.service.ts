@@ -17,10 +17,7 @@ interface AuditLogParams {
   userAgent?: string | undefined | null;
 }
 
-/**
- * Log audit events for all important actions in the system
- * Captures: CREATE, UPDATE, DELETE, LOGIN, PASSWORD_CHANGE, INVITE, ACCEPT, REJECT, etc.
- */
+
 const logAudit = async (params: AuditLogParams): Promise<void> => {
   try {
     await prisma.auditLog.create({
@@ -45,13 +42,11 @@ const logAudit = async (params: AuditLogParams): Promise<void> => {
     });
   } catch (error) {
     console.error("❌ AuditLog writing failed:", error);
-    // Don't throw - audit logging failures shouldn't break the main operation
+    
   }
 };
 
-/**
- * Helper to extract values for audit comparison
- */
+
 const extractAuditValues = (obj: any, fields: string[]) => {
   const result: Record<string, any> = {};
   fields.forEach((field) => {

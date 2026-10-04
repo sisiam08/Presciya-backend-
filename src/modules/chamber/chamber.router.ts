@@ -8,10 +8,10 @@ import { WorkspaceRole } from "../../../generated/prisma/enums";
 
 const router = Router();
 
-// Require user to be logged in
+
 router.use(authOnly());
 
-// Create chamber (OWNER/DOCTOR in workspace)
+
 router.post(
   "/",
   authWorkspace([WorkspaceRole.OWNER, WorkspaceRole.DOCTOR]) as any,
@@ -19,21 +19,21 @@ router.post(
   ChamberControllers.createChamber,
 );
 
-// Get user's chambers (active workspace)
+
 router.get(
   "/my-chambers",
   authWorkspace([]) as any,
   ChamberControllers.getMyChambers,
 );
 
-// Get chamber by ID (active workspace)
+
 router.get(
   "/:id",
   authWorkspace([], { resource: "chamber" }) as any,
   ChamberControllers.getChamberById,
 );
 
-// Update chamber (chamber owner only)
+
 router.patch(
   "/:id",
   authWorkspace([WorkspaceRole.OWNER], {
@@ -43,7 +43,7 @@ router.patch(
   ChamberControllers.updateChamber,
 );
 
-// Delete chamber (chamber owner only)
+
 router.delete(
   "/:id",
   authWorkspace([WorkspaceRole.OWNER], {
@@ -52,7 +52,7 @@ router.delete(
   ChamberControllers.deleteChamber,
 );
 
-// Add chamber schedule (chamber owner only)
+
 router.post(
   "/:id/schedules",
   authWorkspace([WorkspaceRole.OWNER], {
@@ -62,16 +62,16 @@ router.post(
   ChamberControllers.addChamberSchedule,
 );
 
-// Delete schedule (chamber owner only)
+
 router.delete(
   "/schedules/:scheduleId",
   authWorkspace([WorkspaceRole.OWNER]) as any,
   ChamberControllers.deleteChamberSchedule,
 );
 
-// Create appointment (any workspace member). Appointment booking is a premium,
-// admin-configurable feature, so the same entitlement gate as
-// POST /appointment applies here too (otherwise this route bypasses it).
+
+
+
 router.post(
   "/:id/appointments",
   authWorkspace([
@@ -88,7 +88,7 @@ router.post(
   ChamberControllers.createAppointment,
 );
 
-// Get chamber appointments (chamber owner or doctor)
+
 router.get(
   "/:id/appointments",
   authWorkspace([WorkspaceRole.OWNER, WorkspaceRole.DOCTOR], {

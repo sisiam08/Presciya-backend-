@@ -20,7 +20,7 @@ const assignDoctor = async (
   workspaceId: string,
   invitedById: string,
 ) => {
-  // Check if the person assigning the doctor is verified to perform this action
+  
   await checkUserVerification(invitedById);
 
   const { name, email, dummyPassword, departmentId } = doctorData;
@@ -36,13 +36,13 @@ const assignDoctor = async (
   );
 
   const resutl = await prisma.$transaction(async (tx) => {
-    // Check if doctor profile already exists for this user
+    
     let doctorProfile = await tx.doctor.findUnique({
       where: { userId: result.user.id },
     });
 
     if (!doctorProfile) {
-      // Create new doctor profile
+      
       doctorProfile = await tx.doctor.create({
         data: {
           name,
@@ -114,9 +114,9 @@ const getDoctorProfile = async (userId: string) => {
     where: {
       userId,
     },
-    // The account's authoritative contact details live on the user record.
-    // Branding / prescription templates read them from here rather than
-    // duplicating phone and email on the doctor profile.
+    
+    
+    
     include: {
       user: {
         select: {
@@ -140,7 +140,7 @@ const getDoctorProfileById = async (doctorId: string, workspaceId: string) => {
     throw createAppError("Doctor not found", Status.NOT_FOUND);
   }
 
-  // BOLA/IDOR: only expose a doctor who is a member of the caller's workspace.
+  
   const membership = await prisma.membership.findUnique({
     where: {
       userId_workspaceId: { userId: doctor.userId, workspaceId },
@@ -156,8 +156,8 @@ const getDoctorProfileById = async (doctorId: string, workspaceId: string) => {
 };
 
 const getAllDoctors = async (workspaceId: string) => {
-  // Scoped to doctors who are active members of the active workspace, never
-  // the whole platform (Section 6.4).
+  
+  
   return await prisma.doctor.findMany({
     where: {
       user: {
@@ -170,7 +170,7 @@ const getAllDoctors = async (workspaceId: string) => {
 };
 
 const getMyDoctors = async (workspaceId: string) => {
-  // List doctors who are active members of the given workspace
+  
   const memberships = await prisma.membership.findMany({
     where: {
       workspaceId,
@@ -211,13 +211,13 @@ const updateDoctorProfile = async (
   userId: string,
   workspaceId?: string,
 ) => {
-  // Profile completion is allowed before professional verification (Section
-  // 7.4): a pending doctor must be able to fill in their BMDC/qualifications
-  // and signature in order to submit for verification.
+  
+  
+  
 
   const { signatureUrl, registrationNo, qualification, designation } = data;
 
-  // Map API field names to the Doctor model columns
+  
   const doctorFields: Record<string, any> = {};
   if (data.name !== undefined) doctorFields.name = data.name;
   if (registrationNo !== undefined) doctorFields.bmdcNumber = registrationNo;
@@ -231,13 +231,13 @@ const updateDoctorProfile = async (
   if (data.prescriptionTemplate !== undefined)
     doctorFields.prescriptionTemplate = data.prescriptionTemplate;
 
-  // Get old values for audit logging
+  
   const oldDoctor = await prisma.doctor.findUnique({
     where: { userId },
   });
 
   const doctor = await prisma.$transaction(async (tx) => {
-    // Delete old signature if a new one is provided
+    
     if (signatureUrl) {
       const doctor = await tx.doctor.findUnique({
         where: { userId },
@@ -254,7 +254,7 @@ const updateDoctorProfile = async (
       data: doctorFields,
     });
 
-    // Persist an uploaded profile image on the User record (avatar).
+    
     if ((data as any).image) {
       await tx.user.update({
         where: { id: userId },
@@ -265,7 +265,7 @@ const updateDoctorProfile = async (
     return updatedDoctor;
   });
 
-  // Audit: Log doctor profile update
+  
   if (oldDoctor) {
     const oldValues: Record<string, any> = {};
     const newValues: Record<string, any> = {};

@@ -44,12 +44,7 @@ export const requireFeatureAccess = (
   };
 };
 
-/**
- * Blocks a route entirely while a feature is globally unavailable, regardless
- * of the caller's plan. Used for surfaces that are not part of the current
- * public release (e.g. institution management) so they cannot be reached by
- * calling the API directly. State comes from the DB (FeatureFlag), not code.
- */
+
 export const requireGlobalFeature = (
   featureKey: string,
   message = "This feature is currently unavailable",
@@ -66,7 +61,7 @@ export const requireGlobalFeature = (
   };
 };
 
-/** Convenience guard for the institution surface (coming-soon message). */
+
 export const requireInstitutionEnabled = requireGlobalFeature(
   INSTITUTION_FEATURE_KEY,
   INSTITUTION_COMING_SOON_MESSAGE,

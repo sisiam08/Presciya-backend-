@@ -5,8 +5,8 @@ import { UploadControllers } from "./upload.controller";
 
 const router = Router();
 
-// Any authenticated user may upload a configuration image; the returned URL is
-// only usable by the caller's own settings.
+
+
 router.post(
   "/image",
   authOnly(),

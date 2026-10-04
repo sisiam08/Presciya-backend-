@@ -4,7 +4,7 @@ import sendResponse from "../../utils/sendResponse";
 import { Status } from "../../errors/httpStatus";
 import { SystemServices } from "./system.service";
 
-// Public feature availability. No auth: the signup page needs it before login.
+
 const getAvailability = catchAsync(async (_req: Request, res: Response) => {
   const availability = await SystemServices.getAvailability();
 

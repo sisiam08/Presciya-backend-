@@ -8,11 +8,7 @@ import {
 import { AuditService } from "../audit/audit.service";
 import { checkUserVerification } from "../../utils/verificationCheck";
 
-/**
- * Low-level department creation. Shared by the workspace-scoped
- * `institution/departments` surface and the standalone `/departments` module so
- * there is exactly one write path (Section 10.2).
- */
+
 const createDepartmentForInstitution = async (
   institutionId: string,
   data: {
@@ -29,9 +25,7 @@ const createDepartmentForInstitution = async (
   });
 };
 
-/**
- * Low-level department listing for an institution (with assigned doctors).
- */
+
 const listDepartmentsForInstitution = async (institutionId: string) => {
   return prisma.department.findMany({
     where: { institutionId },
@@ -53,9 +47,7 @@ const listDepartmentsForInstitution = async (institutionId: string) => {
   });
 };
 
-/**
- * Create a new department in an institution
- */
+
 const createDepartment = async (
   userId: string,
   institutionId: string,
@@ -64,10 +56,10 @@ const createDepartment = async (
     description?: string;
   },
 ) => {
-  // Verify user is verified to perform this action
+  
   await checkUserVerification(userId);
 
-  // Verify user owns the institution
+  
   const institution = await prisma.institution.findUnique({
     where: { id: institutionId, userId },
     select: { id: true, name: true },
@@ -80,13 +72,13 @@ const createDepartment = async (
     );
   }
 
-  // Create department
+  
   const department = await createDepartmentForInstitution(
     institutionId,
     data,
   );
 
-  // Audit: Log department creation
+  
   await AuditService.logAudit({
     userId,
     actionType: AuditActionType.CREATE,
@@ -105,16 +97,12 @@ const createDepartment = async (
   return department;
 };
 
-/**
- * Get all departments for an institution
- */
+
 const getDepartmentsByInstitution = async (institutionId: string) => {
   return await listDepartmentsForInstitution(institutionId);
 };
 
-/**
- * Get department details
- */
+
 const getDepartmentDetails = async (departmentId: string) => {
   const department = await prisma.department.findUnique({
     where: { id: departmentId },
@@ -151,9 +139,7 @@ const getDepartmentDetails = async (departmentId: string) => {
   return department;
 };
 
-/**
- * Update department
- */
+
 const updateDepartment = async (
   departmentId: string,
   userId: string,
@@ -162,7 +148,7 @@ const updateDepartment = async (
     description: string;
   }>,
 ) => {
-  // Verify user is verified
+  
   await checkUserVerification(userId);
 
   const department = await prisma.department.findUnique({
@@ -178,7 +164,7 @@ const updateDepartment = async (
     throw createAppError("Department not found", Status.NOT_FOUND);
   }
 
-  // Verify user owns the institution
+  
   if (department.institution.userId !== userId) {
     throw createAppError(
       "You don't have permission to update this department",
@@ -186,13 +172,13 @@ const updateDepartment = async (
     );
   }
 
-  // Update department
+  
   const updated = await prisma.department.update({
     where: { id: departmentId },
     data,
   });
 
-  // Audit: Log department update
+  
   await AuditService.logAudit({
     userId,
     actionType: AuditActionType.UPDATE,
@@ -212,11 +198,9 @@ const updateDepartment = async (
   return updated;
 };
 
-/**
- * Delete department
- */
+
 const deleteDepartment = async (departmentId: string, userId: string) => {
-  // Verify user is verified
+  
   await checkUserVerification(userId);
 
   const department = await prisma.department.findUnique({
@@ -232,7 +216,7 @@ const deleteDepartment = async (departmentId: string, userId: string) => {
     throw createAppError("Department not found", Status.NOT_FOUND);
   }
 
-  // Verify user owns the institution
+  
   if (department.institution.userId !== userId) {
     throw createAppError(
       "You don't have permission to delete this department",
@@ -240,7 +224,7 @@ const deleteDepartment = async (departmentId: string, userId: string) => {
     );
   }
 
-  // Check if department has doctors assigned
+  
   const doctorCount = await prisma.institutionDoctor.count({
     where: { departmentId },
   });
@@ -252,12 +236,12 @@ const deleteDepartment = async (departmentId: string, userId: string) => {
     );
   }
 
-  // Delete department
+  
   const deleted = await prisma.department.delete({
     where: { id: departmentId },
   });
 
-  // Audit: Log department deletion
+  
   await AuditService.logAudit({
     userId,
     actionType: AuditActionType.DELETE,

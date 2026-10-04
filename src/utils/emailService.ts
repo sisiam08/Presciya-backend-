@@ -1,11 +1,11 @@
 import nodemailer from "nodemailer";
 import config from "../config";
 
-// Create a reusable transporter
+
 const transporter = nodemailer.createTransport({
   host: config.nodemailer.host,
   port: config.nodemailer.port,
-  secure: config.nodemailer.port === 465, // true for 465, false for other ports
+  secure: config.nodemailer.port === 465, 
   auth: {
     user: config.nodemailer.auth.user,
     pass: config.nodemailer.auth.pass,
@@ -41,7 +41,7 @@ const sendEmail = async (options: EmailOptions): Promise<void> => {
   }
 };
 
-// Password reset email template
+
 const sendPasswordResetEmail = async (
   email: string,
   name: string,
@@ -128,7 +128,7 @@ Presciya
   });
 };
 
-// Workspace invitation email template
+
 const sendInvitationEmail = async (
   email: string,
   name: string,
@@ -240,7 +240,7 @@ Presciya
   });
 };
 
-// OTP email template
+
 const sendOTPEmail = async (
   email: string,
   name: string,

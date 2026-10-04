@@ -23,7 +23,7 @@ const createAppointmentSchema = z.object({
     notes: z.string().max(1000).optional(),
     appointmentType: z.nativeEnum(AppointmentType).optional(),
     discount: money.optional(),
-    // Optional immediate settlement.
+    
     paymentStatus: z.enum(["PENDING", "PAID", "FREE"]).optional(),
     paymentMethod: z.nativeEnum(PaymentMethod).optional(),
     paidAmount: money.optional(),

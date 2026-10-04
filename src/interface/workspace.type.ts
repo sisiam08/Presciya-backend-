@@ -5,7 +5,7 @@ import {
   MembershipStatus,
 } from "../../generated/prisma/enums";
 
-// ============ WORKSPACE DTOs ============
+
 
 export interface ICreateWorkspaceDTO {
   name: string;
@@ -39,7 +39,7 @@ export interface IWorkspaceDetailDTO extends IWorkspaceResponseDTO {
   };
 }
 
-// ============ MEMBERSHIP DTOs ============
+
 
 export interface IMembershipDTO {
   id: string;
@@ -63,7 +63,7 @@ export interface IUpdateMembershipDTO {
   status?: MembershipStatus;
 }
 
-// ============ INVITATION DTOs ============
+
 
 export interface ICreateInvitationDTO {
   email: string;
@@ -100,7 +100,7 @@ export interface IRejectInvitationDTO {
   reason?: string;
 }
 
-// ============ LOGIN/AUTH RESPONSE DTOs ============
+
 
 export interface IWorkspaceContextDTO {
   id: string;
@@ -136,14 +136,14 @@ export interface ISwitchWorkspaceResponseDTO {
   workspace: IWorkspaceContextDTO;
 }
 
-// ============ INVITE USER DTO ============
+
 
 export interface IInviteUserDTO {
   email: string;
   role: WorkspaceRole;
 }
 
-// ============ MEMBER MANAGEMENT DTO ============
+
 
 export interface IUpdateMemberRoleDTO {
   role: WorkspaceRole;

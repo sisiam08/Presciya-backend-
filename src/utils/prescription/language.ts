@@ -1,20 +1,20 @@
 import { PrescriptionLanguage } from "../../../generated/prisma/enums";
 
-// Centralised prescription-language dictionary. This is the ONLY place the
-// translatable strings live — templates never hardcode translation logic.
-//
-// Product decision: only system-generated VALUES are localised. Field LABELS
-// stay English in both languages, and text the doctor types is never translated
-// (it is rendered exactly as entered).
-//
-// Localised values:
-//   1. "As needed" — the default when no next-visit date is set
-//   2. Medicine meal-timing labels
-//   3. Duration values (formatDurationValue / localizeDurationText)
-//   4. The next-visit date (formatPrescriptionDate)
-//   5. Predefined Special Instruction options (localizeSpecialInstruction)
-// Everything else (names, medicine/generic, strength, dosage numbers, dates,
-// IDs, addresses, doctor-typed text) stays exactly as entered.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 export interface PrescriptionLabels {
   instructions: string;
@@ -24,8 +24,8 @@ export interface PrescriptionLabels {
   mealTiming: Record<string, string>;
 }
 
-// Section labels are intentionally NOT translated — they read the same in both
-// languages so a bilingual prescription keeps familiar headings.
+
+
 const FIXED_LABELS = {
   instructions: "Instructions",
   advice: "Advice",
@@ -82,10 +82,10 @@ export const translateMealTiming = (
   );
 };
 
-// ─── System-generated value localisation ─────────────────────────────────────
-// Durations and dates are produced by the system (not typed by the doctor), so
-// they are localised to the prescription language. Free text the doctor writes
-// is never translated.
+
+
+
+
 
 const BN_DIGITS = ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯"];
 
@@ -131,7 +131,7 @@ const BN_DURATION_UNITS: Record<string, string> = {
 const singularUnit = (unit: string): string =>
   unit.toLowerCase().replace(/s$/, "");
 
-// "4 weeks" -> "৪ সপ্তাহ" (Bangla) / "4 weeks" (English).
+
 export const formatDurationValue = (
   value: number,
   unit: string,
@@ -145,7 +145,7 @@ export const formatDurationValue = (
   return `${value} ${plural}`;
 };
 
-// Localise a legacy free-text duration ("7 days" -> "৭ দিন") when possible.
+
 export const localizeDurationText = (
   text: string,
   language?: string | null,
@@ -157,13 +157,13 @@ export const localizeDurationText = (
   });
 };
 
-// ─── Predefined "Special Instruction" options ────────────────────────────────
-// The medicine card offers these as a picker (plus a free-text "Custom…"
-// option). They are system-provided values, so they ARE localised. A custom
-// entry is doctor text and is rendered exactly as typed.
-//
-// NOTE: this list is mirrored on the frontend (SPECIAL_INSTRUCTION_OPTIONS in
-// PrescriptionBuilder.tsx) — keep both in sync.
+
+
+
+
+
+
+
 
 export const SPECIAL_INSTRUCTION_OPTIONS = [
   "Take with plenty of water",
@@ -195,10 +195,7 @@ const BN_SPECIAL_INSTRUCTIONS: Record<string, string> = {
   "Keep out of reach of children": "শিশুদের নাগালের বাইরে রাখুন",
 };
 
-/**
- * Localises a predefined Special Instruction. Text the doctor typed themselves
- * (anything not in the predefined list) is returned unchanged.
- */
+
 export const localizeSpecialInstruction = (
   text?: string | null,
   language?: string | null,

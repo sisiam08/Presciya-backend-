@@ -17,12 +17,12 @@ const getDashboardAnalytics = catchAsync(
     const workspaceRole = req.workspaceRole as WorkspaceRole;
     const workspaceType = req.user?.workspaceType as WorkspaceType | undefined;
 
-    // Decide by workspace TYPE, not role alone: a personal-workspace OWNER is a
-    // doctor, not an institution. Only institution workspaces (excluding
-    // doctors) get institution analytics.
-    // Canonical scope resolution, identical to every other module: the active
-    // workspace, narrowed to the active chamber when one is selected, and widened
-    // only on an explicit "all" from the personal context.
+    
+    
+    
+    
+    
+    
     const scope = await resolveRequestScope(userId, workspaceId, req as any);
 
     const result =

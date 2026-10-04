@@ -21,15 +21,15 @@ import {
   getStartOfYear,
 } from "../../utils/datetime";
 
-// ─── Date helpers (local time — consistent with the server's clock) ──────────
 
-// Parse a "YYYY-MM-DD" (or ISO) string into a Date at local midnight so the
-// stored transaction date matches the calendar day the user picked.
+
+
+
 const parseTransactionDate = (value: string): Date => {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
   if (match) {
-    // A picked date means that calendar day in Bangladesh time, not the
-    // server's timezone.
+    
+    
     return bangladeshDayStart(
       Number(match[1]),
       Number(match[2]),
@@ -43,14 +43,14 @@ const parseTransactionDate = (value: string): Date => {
   return parsed;
 };
 
-// All finance period boundaries are Bangladesh calendar boundaries (the
-// product's operating timezone), so "today" means the user's local day.
+
+
 const startOfDay = (d: Date) => getStartOfDay(d);
 const endOfDay = (d: Date) => getEndOfDay(d);
 
-// Week starts on Saturday (matches the app's en-BD weekday display).
+
 const startOfWeek = (d: Date) => {
-  const dayOfWeek = getDayOfWeek(d); // 0 = Sunday … 6 = Saturday
+  const dayOfWeek = getDayOfWeek(d); 
   const daysSinceSaturday = (dayOfWeek + 1) % 7;
   return getStartOfDay(
     new Date(getStartOfDay(d).getTime() - daysSinceSaturday * 24 * 60 * 60 * 1000),
@@ -96,7 +96,7 @@ const resolveDateRange = (
   }
 };
 
-// ─── Authorization scope ─────────────────────────────────────────────────────
+
 
 const getAccessibleWorkspaceIds = async (userId: string): Promise<string[]> => {
   const memberships = await prisma.membership.findMany({
@@ -106,12 +106,7 @@ const getAccessibleWorkspaceIds = async (userId: string): Promise<string[]> => {
   return memberships.map((m) => m.workspaceId);
 };
 
-/**
- * Authorises a finance action against the TARGET workspace's membership role.
- * The active-workspace role is not enough: in "All Workspaces" mode a user may
- * act on a workspace where their role differs (e.g. OWNER of a personal
- * practice while viewing it from an institution where they are a DOCTOR).
- */
+
 const assertFinancePermission = async (
   userId: string,
   workspaceId: string,
@@ -139,10 +134,7 @@ const assertFinancePermission = async (
   }
 };
 
-/**
- * Resolves the set of workspace IDs a request may read/write. The client may
- * never supply the list — it is always derived from ACTIVE memberships.
- */
+
 const resolveScopeWorkspaceIds = async (
   userId: string,
   activeWorkspaceId: string,
@@ -181,7 +173,7 @@ const resolveScopeWorkspaceIds = async (
   return [target];
 };
 
-// ─── Categories ──────────────────────────────────────────────────────────────
+
 
 const resolveCategory = async (
   categoryId: string,
@@ -204,8 +196,8 @@ const resolveCategory = async (
       Status.BAD_REQUEST,
     );
   }
-  // System categories (workspaceId null) are shared; custom ones must belong to
-  // the target workspace.
+  
+  
   if (category.workspaceId && category.workspaceId !== workspaceId) {
     throw createAppError(
       "Category does not belong to this workspace",
@@ -230,7 +222,7 @@ const listCategories = async (
 
   return prisma.financialCategory.findMany({
     where: {
-      // System categories + this workspace's custom categories.
+      
       OR: [{ workspaceId: null }, { workspaceId: activeWorkspaceId }],
       ...(filters.type ? { type: filters.type } : {}),
       ...(filters.includeInactive ? {} : { isActive: true }),
@@ -249,7 +241,7 @@ const createCategory = async (
   if (!accessible.includes(workspaceId)) {
     throw createAppError("Workspace access denied", Status.FORBIDDEN);
   }
-  // Category management is a "manage" action, not a day-to-day record action.
+  
   await assertFinancePermission(userId, workspaceId, "finance_update");
 
   const name = data.name.trim();
@@ -305,8 +297,8 @@ const updateCategory = async (
   if (!category) {
     throw createAppError("Category not found", Status.NOT_FOUND);
   }
-  // System categories are read-only; only this workspace's own categories can
-  // be edited.
+  
+  
   if (category.workspaceId !== workspaceId) {
     throw createAppError(
       "You can only edit categories created in this workspace",
@@ -369,8 +361,8 @@ const deleteCategory = async (
   }
   await assertFinancePermission(userId, workspaceId, "finance_delete");
 
-  // Never delete a category that historical transactions reference — deactivate
-  // instead so the history stays intact.
+  
+  
   const usageCount = await prisma.financialTransaction.count({
     where: { categoryId, isDeleted: false },
   });
@@ -397,7 +389,7 @@ const deleteCategory = async (
   });
 };
 
-// ─── Transactions ────────────────────────────────────────────────────────────
+
 
 const assertReferences = async (
   workspaceId: string,
@@ -459,11 +451,11 @@ const TRANSACTION_INCLUDE = {
   prescription: { select: { id: true, serialNumber: true } },
 } as const;
 
-// NOTE: there is deliberately no `createTransaction` here. Ledger rows are only
-// ever produced by the payment workflow (appointment payment →
-// `recordAppointmentIncome` in the appointment module); hand-creating a row
-// would bypass that workflow. `resolveCategory`, `assertReferences` and
-// `parseTransactionDate` remain because `updateTransaction` still uses them.
+
+
+
+
+
 
 const buildTransactionWhere = (
   workspaceIds: string[],
@@ -576,7 +568,7 @@ const getTransaction = async (
   });
 
   if (!tx || !accessible.includes(tx.workspaceId)) {
-    // Same response whether it is missing or forbidden — avoids leaking IDs.
+    
     throw createAppError("Transaction not found", Status.NOT_FOUND);
   }
 
@@ -703,8 +695,8 @@ const deleteTransaction = async (
     "finance_delete",
   );
 
-  // Soft delete keeps financial history auditable (matches the app's deletion
-  // strategy for important records).
+  
+  
   await prisma.financialTransaction.update({
     where: { id: transactionId },
     data: { isDeleted: true, deletedAt: new Date() },
@@ -730,7 +722,7 @@ const deleteTransaction = async (
   });
 };
 
-// ─── Summary / Reports ───────────────────────────────────────────────────────
+
 
 const sumByType = async (where: any) => {
   const grouped = await prisma.financialTransaction.groupBy({
@@ -872,14 +864,14 @@ const getWorkspaceBreakdown = async (where: any) => {
   return [...byWorkspace.values()].sort((a, b) => b.income - a.income);
 };
 
-// Chooses a sensible grouping when the caller does not specify one.
+
 const pickGroupBy = (period: PeriodKey, start?: Date, end?: Date) => {
   if (period === "today") return "day" as const;
   if (period === "week") return "day" as const;
   if (period === "month") return "day" as const;
   if (period === "year") return "month" as const;
   if (period === "all") return "month" as const;
-  // custom: decide from the range length
+  
   if (start && end) {
     const days = (end.getTime() - start.getTime()) / 86_400_000;
     if (days <= 31) return "day" as const;
