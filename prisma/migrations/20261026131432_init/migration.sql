@@ -1,8 +1,20 @@
+-- Enable pg_trgm extension for trigram similarity search
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 -- CreateEnum
 CREATE TYPE "SystemRole" AS ENUM ('USER', 'SUPER_ADMIN');
 
 -- CreateEnum
-CREATE TYPE "WorkspaceType" AS ENUM ('PERSONAL', 'INSTITUTION');
+CREATE TYPE "WorkspaceType" AS ENUM ('PERSONAL', 'CHAMBER', 'INSTITUTION');
+
+-- CreateEnum
+CREATE TYPE "InstitutionType" AS ENUM ('HOSPITAL', 'CLINIC');
+
+-- CreateEnum
+CREATE TYPE "AppointmentType" AS ENUM ('NORMAL', 'FOLLOW_UP');
+
+-- CreateEnum
+CREATE TYPE "AppointmentPaymentStatus" AS ENUM ('PENDING', 'PAID', 'FREE', 'CANCELLED', 'REFUNDED');
 
 -- CreateEnum
 CREATE TYPE "WorkspaceRole" AS ENUM ('OWNER', 'ADMIN', 'DOCTOR', 'MANAGER', 'ASSISTANT');
@@ -26,6 +38,9 @@ CREATE TYPE "ContactLabel" AS ENUM ('DEFAULT', 'RECEPTION', 'EMERGENCY', 'AMBULA
 CREATE TYPE "PrescriptionStatus" AS ENUM ('DRAFT', 'FINALIZED', 'CANCELLED', 'ARCHIVED');
 
 -- CreateEnum
+CREATE TYPE "FinancialTransactionType" AS ENUM ('INCOME', 'EXPENSE');
+
+-- CreateEnum
 CREATE TYPE "PaymentStatus" AS ENUM ('PENDING', 'PAID', 'FAILED', 'REFUNDED');
 
 -- CreateEnum
@@ -35,16 +50,25 @@ CREATE TYPE "MedicineInstructionType" AS ENUM ('DAILY', 'TOPICAL', 'WEEKLY', 'CU
 CREATE TYPE "MealTiming" AS ENUM ('BEFORE_MEAL', 'AFTER_MEAL', 'WITH_MEAL', 'AFTER_FULL_MEAL', 'EMPTY_STOMACH', 'ANYTIME');
 
 -- CreateEnum
+CREATE TYPE "PrescriptionLanguage" AS ENUM ('ENGLISH', 'BANGLA');
+
+-- CreateEnum
+CREATE TYPE "PrescriptionDesignTemplate" AS ENUM ('DEFAULT', 'MODERN_CLINICAL', 'MINIMAL_PROFESSIONAL', 'MODERN_MEDICAL', 'ELEGANT_COMPACT');
+
+-- CreateEnum
 CREATE TYPE "AppointmentStatus" AS ENUM ('PENDING', 'CONFIRMED', 'RUNNING', 'COMPLETED', 'CANCELLED', 'NO_SHOW');
 
 -- CreateEnum
 CREATE TYPE "LoginStatus" AS ENUM ('SUCCESS', 'FAILED', 'SUSPICIOUS');
 
 -- CreateEnum
-CREATE TYPE "AuditActionType" AS ENUM ('CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'PASSWORD_CHANGE', 'VERIFY', 'REJECT', 'ACCEPT', 'CANCEL', 'INVITE', 'PRINT', 'EXPORT', 'DOWNLOAD', 'CHANGE', 'REQUEST', 'OTHER');
+CREATE TYPE "AuditActionType" AS ENUM ('CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'PASSWORD_CHANGE', 'VERIFY', 'REJECT', 'ACCEPT', 'ACCEPT_INVITE', 'REJECT_INVITE', 'CANCEL', 'INVITE', 'STATUS_CHANGE', 'SUSPEND', 'RESTORE', 'SUBSCRIPTION_CHANGE', 'PRINT', 'EXPORT', 'DOWNLOAD', 'CHANGE', 'REQUEST', 'OTHER');
 
 -- CreateEnum
-CREATE TYPE "AuditEntityType" AS ENUM ('USER', 'WORKSPACE', 'MEMBERSHIP', 'INVITATION', 'PATIENT', 'PRESCRIPTION', 'CHAMBER', 'APPOINTMENT', 'SUBSCRIPTION', 'PAYMENT', 'INVOICE', 'VERIFICATION', 'SYSTEM');
+CREATE TYPE "OnboardingState" AS ENUM ('PROFILE_SETUP', 'VERIFICATION_SUBMITTED', 'VERIFICATION_APPROVED', 'READY');
+
+-- CreateEnum
+CREATE TYPE "AuditEntityType" AS ENUM ('USER', 'WORKSPACE', 'MEMBERSHIP', 'INVITATION', 'PATIENT', 'PRESCRIPTION', 'CHAMBER', 'APPOINTMENT', 'SUBSCRIPTION', 'PAYMENT', 'INVOICE', 'VERIFICATION', 'SYSTEM', 'FINANCIAL_TRANSACTION', 'FINANCIAL_CATEGORY');
 
 -- CreateEnum
 CREATE TYPE "PaymentMethod" AS ENUM ('CARD', 'BANK_TRANSFER', 'MOBILE_BANKING', 'CASH', 'CHEQUE', 'ONLINE_GATEWAY');
@@ -53,7 +77,7 @@ CREATE TYPE "PaymentMethod" AS ENUM ('CARD', 'BANK_TRANSFER', 'MOBILE_BANKING', 
 CREATE TYPE "InvoiceStatus" AS ENUM ('DRAFT', 'ISSUED', 'PAID', 'OVERDUE', 'CANCELLED');
 
 -- CreateEnum
-CREATE TYPE "NotificationType" AS ENUM ('APPOINTMENT', 'PRESCRIPTION', 'PAYMENT', 'SYSTEM', 'USER_ACTION', 'VERIFICATION');
+CREATE TYPE "NotificationType" AS ENUM ('APPOINTMENT', 'PRESCRIPTION', 'PAYMENT', 'SYSTEM', 'USER_ACTION', 'VERIFICATION', 'INVITATION', 'SUBSCRIPTION');
 
 -- CreateEnum
 CREATE TYPE "MembershipStatus" AS ENUM ('PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED');
@@ -68,6 +92,9 @@ CREATE TABLE "User" (
     "systemRole" "SystemRole" NOT NULL DEFAULT 'USER',
     "avatar" TEXT,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "isVerified" BOOLEAN NOT NULL DEFAULT false,
+    "emailVerifiedAt" TIMESTAMP(3),
+    "onboardingState" "OnboardingState" NOT NULL DEFAULT 'PROFILE_SETUP',
     "lastLoginAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -87,6 +114,8 @@ CREATE TABLE "Doctor" (
     "signatureUrl" TEXT,
     "verificationStatus" "VerificationStatus" NOT NULL DEFAULT 'PENDING',
     "verificationType" "VerificationType" NOT NULL DEFAULT 'PERSONAL',
+    "prescriptionLanguage" "PrescriptionLanguage" NOT NULL DEFAULT 'ENGLISH',
+    "prescriptionTemplate" "PrescriptionDesignTemplate" NOT NULL DEFAULT 'DEFAULT',
     "verifiedAt" TIMESTAMP(3),
     "verifiedById" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -103,6 +132,12 @@ CREATE TABLE "institutions" (
     "tradeLicenseNo" TEXT,
     "website" TEXT,
     "description" TEXT,
+    "primaryColor" TEXT,
+    "secondaryColor" TEXT,
+    "fontFamily" TEXT,
+    "headerTemplate" TEXT,
+    "footerTemplate" TEXT,
+    "showLogo" BOOLEAN,
     "verificationStatus" "VerificationStatus" NOT NULL DEFAULT 'PENDING',
     "verifiedAt" TIMESTAMP(3),
     "verifiedById" TEXT,
@@ -116,6 +151,7 @@ CREATE TABLE "institutions" (
 CREATE TABLE "Workspace" (
     "id" TEXT NOT NULL,
     "type" "WorkspaceType" NOT NULL,
+    "institutionType" "InstitutionType",
     "name" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
     "logo" TEXT,
@@ -123,6 +159,7 @@ CREATE TABLE "Workspace" (
     "email" TEXT,
     "phone" TEXT,
     "address" TEXT,
+    "templateConfig" JSONB,
     "ownerId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -208,6 +245,7 @@ CREATE TABLE "medicines" (
 CREATE TABLE "patients" (
     "id" TEXT NOT NULL,
     "workspaceId" TEXT,
+    "chamberId" TEXT,
     "doctorId" TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
     "name" TEXT NOT NULL,
     "age" INTEGER NOT NULL,
@@ -232,23 +270,121 @@ CREATE TABLE "patients" (
 CREATE TABLE "Prescription" (
     "id" TEXT NOT NULL,
     "workspaceId" TEXT NOT NULL,
-    "chamberId" TEXT NOT NULL,
+    "chamberId" TEXT,
     "doctorUserId" TEXT NOT NULL,
     "patientId" TEXT NOT NULL,
     "userId" TEXT,
     "status" "PrescriptionStatus" NOT NULL DEFAULT 'DRAFT',
+    "serialNumber" TEXT,
+    "verificationCode" TEXT,
+    "language" "PrescriptionLanguage" NOT NULL DEFAULT 'ENGLISH',
+    "template" "PrescriptionDesignTemplate" NOT NULL DEFAULT 'DEFAULT',
+    "renderSnapshot" JSONB,
+    "version" INTEGER NOT NULL DEFAULT 1,
+    "supersedesId" TEXT,
     "complaints" TEXT,
     "diagnosis" TEXT,
     "clinicalNotes" TEXT,
     "advises" TEXT,
+    "history" TEXT,
+    "examRespiratoryRate" TEXT,
+    "examLungs" TEXT,
+    "examHeart" TEXT,
+    "examAnaemia" TEXT,
+    "examCyanosis" TEXT,
+    "examOedema" TEXT,
+    "examDehydration" TEXT,
+    "examOthers" TEXT,
     "nextVisitDate" TIMESTAMP(3),
     "pdfUrl" TEXT,
     "isDeleted" BOOLEAN NOT NULL DEFAULT false,
     "deletedAt" TIMESTAMP(3),
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "appointmentId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Prescription_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "financial_categories" (
+    "id" TEXT NOT NULL,
+    "workspaceId" TEXT,
+    "name" TEXT NOT NULL,
+    "type" "FinancialTransactionType" NOT NULL,
+    "description" TEXT,
+    "isSystem" BOOLEAN NOT NULL DEFAULT false,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "financial_categories_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "financial_transactions" (
+    "id" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "createdById" TEXT NOT NULL,
+    "type" "FinancialTransactionType" NOT NULL,
+    "amount" DECIMAL(14,2) NOT NULL,
+    "categoryId" TEXT NOT NULL,
+    "paymentMethod" "PaymentMethod" NOT NULL,
+    "description" TEXT,
+    "notes" TEXT,
+    "transactionDate" TIMESTAMP(3) NOT NULL,
+    "patientId" TEXT,
+    "appointmentId" TEXT,
+    "prescriptionId" TEXT,
+    "isDeleted" BOOLEAN NOT NULL DEFAULT false,
+    "deletedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "financial_transactions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "doctor_visiting_fees" (
+    "id" TEXT NOT NULL,
+    "doctorId" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "chamberId" TEXT,
+    "visitingFee" DECIMAL(12,2) NOT NULL,
+    "followUpFee" DECIMAL(12,2),
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "doctor_visiting_fees_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "revenue_share_configs" (
+    "id" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "doctorId" TEXT,
+    "percentage" DECIMAL(5,2) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "revenue_share_configs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "prescription_templates" (
+    "id" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "doctorUserId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "complaints" TEXT,
+    "advises" TEXT,
+    "medicinesJson" JSONB NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "prescription_templates_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -272,11 +408,13 @@ CREATE TABLE "clinical_observations" (
 -- CreateTable
 CREATE TABLE "subscription_variants" (
     "id" TEXT NOT NULL,
+    "key" TEXT,
     "variantName" TEXT NOT NULL,
     "description" JSONB NOT NULL,
     "dailyPrescriptionLimit" INTEGER NOT NULL,
     "price" DOUBLE PRECISION NOT NULL,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "sortOrder" INTEGER NOT NULL DEFAULT 100,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -443,7 +581,8 @@ CREATE TABLE "chamber_schedules" (
 -- CreateTable
 CREATE TABLE "appointments" (
     "id" TEXT NOT NULL,
-    "chamberId" TEXT NOT NULL,
+    "workspaceId" TEXT NOT NULL,
+    "chamberId" TEXT,
     "doctorId" TEXT NOT NULL,
     "patientId" TEXT NOT NULL,
     "appointmentDate" TIMESTAMP(3) NOT NULL,
@@ -451,6 +590,18 @@ CREATE TABLE "appointments" (
     "status" "AppointmentStatus" NOT NULL DEFAULT 'PENDING',
     "cancelReason" TEXT,
     "notes" TEXT,
+    "appointmentType" "AppointmentType" NOT NULL DEFAULT 'NORMAL',
+    "visitingFee" DECIMAL(12,2),
+    "discount" DECIMAL(12,2) NOT NULL DEFAULT 0,
+    "payableAmount" DECIMAL(12,2),
+    "paidAmount" DECIMAL(12,2) NOT NULL DEFAULT 0,
+    "paymentStatus" "AppointmentPaymentStatus" NOT NULL DEFAULT 'PENDING',
+    "paymentMethod" "PaymentMethod",
+    "paidAt" TIMESTAMP(3),
+    "revenueSharePercent" DECIMAL(5,2),
+    "hospitalShareAmount" DECIMAL(12,2),
+    "doctorShareAmount" DECIMAL(12,2),
+    "followUpOfId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -475,10 +626,34 @@ CREATE TABLE "prescription_medicines" (
     "instruction" TEXT,
     "notes" TEXT,
     "quantity" INTEGER,
+    "dose" TEXT,
+    "frequencyMorning" INTEGER,
+    "frequencyNoon" INTEGER,
+    "frequencyNight" INTEGER,
+    "durationValue" INTEGER,
+    "durationUnit" TEXT,
+    "applicationAmount" TEXT,
+    "applicationArea" TEXT,
+    "applicationFrequency" TEXT,
+    "specificDays" TEXT,
+    "customScheduleJson" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "prescription_medicines_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "prescription_investigations" (
+    "id" TEXT NOT NULL,
+    "prescriptionId" TEXT NOT NULL,
+    "testName" TEXT NOT NULL,
+    "note" TEXT,
+    "order" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "prescription_investigations_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -698,6 +873,12 @@ CREATE UNIQUE INDEX "medicines_slug_key" ON "medicines"("slug");
 CREATE INDEX "medicines_slug_idx" ON "medicines"("slug");
 
 -- CreateIndex
+CREATE INDEX "medicine_brand_trgm_idx" ON "medicines" USING GIN ("brandName" gin_trgm_ops);
+
+-- CreateIndex
+CREATE INDEX "medicine_generic_trgm_idx" ON "medicines" USING GIN ("generic" gin_trgm_ops);
+
+-- CreateIndex
 CREATE INDEX "patients_phone_idx" ON "patients"("phone");
 
 -- CreateIndex
@@ -705,6 +886,9 @@ CREATE INDEX "patients_workspaceId_idx" ON "patients"("workspaceId");
 
 -- CreateIndex
 CREATE INDEX "patients_doctorId_idx" ON "patients"("doctorId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Prescription_verificationCode_key" ON "Prescription"("verificationCode");
 
 -- CreateIndex
 CREATE INDEX "Prescription_workspaceId_idx" ON "Prescription"("workspaceId");
@@ -719,7 +903,64 @@ CREATE INDEX "Prescription_doctorUserId_idx" ON "Prescription"("doctorUserId");
 CREATE INDEX "Prescription_patientId_idx" ON "Prescription"("patientId");
 
 -- CreateIndex
+CREATE INDEX "Prescription_supersedesId_idx" ON "Prescription"("supersedesId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Prescription_serialNumber_key" ON "Prescription"("serialNumber");
+
+-- CreateIndex
+CREATE INDEX "financial_categories_workspaceId_idx" ON "financial_categories"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "financial_categories_type_idx" ON "financial_categories"("type");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "financial_categories_workspaceId_name_type_key" ON "financial_categories"("workspaceId", "name", "type");
+
+-- CreateIndex
+CREATE INDEX "financial_transactions_workspaceId_idx" ON "financial_transactions"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "financial_transactions_transactionDate_idx" ON "financial_transactions"("transactionDate");
+
+-- CreateIndex
+CREATE INDEX "financial_transactions_type_idx" ON "financial_transactions"("type");
+
+-- CreateIndex
+CREATE INDEX "financial_transactions_categoryId_idx" ON "financial_transactions"("categoryId");
+
+-- CreateIndex
+CREATE INDEX "financial_transactions_workspaceId_transactionDate_idx" ON "financial_transactions"("workspaceId", "transactionDate");
+
+-- CreateIndex
+CREATE INDEX "financial_transactions_workspaceId_type_transactionDate_idx" ON "financial_transactions"("workspaceId", "type", "transactionDate");
+
+-- CreateIndex
+CREATE INDEX "doctor_visiting_fees_workspaceId_idx" ON "doctor_visiting_fees"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "doctor_visiting_fees_chamberId_idx" ON "doctor_visiting_fees"("chamberId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "doctor_visiting_fees_doctorId_chamberId_key" ON "doctor_visiting_fees"("doctorId", "chamberId");
+
+-- CreateIndex
+CREATE INDEX "revenue_share_configs_workspaceId_idx" ON "revenue_share_configs"("workspaceId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "revenue_share_configs_workspaceId_doctorId_key" ON "revenue_share_configs"("workspaceId", "doctorId");
+
+-- CreateIndex
+CREATE INDEX "prescription_templates_workspaceId_idx" ON "prescription_templates"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "prescription_templates_doctorUserId_idx" ON "prescription_templates"("doctorUserId");
+
+-- CreateIndex
 CREATE INDEX "clinical_observations_prescriptionId_idx" ON "clinical_observations"("prescriptionId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "subscription_variants_key_key" ON "subscription_variants"("key");
 
 -- CreateIndex
 CREATE INDEX "subscriptions_workspaceId_idx" ON "subscriptions"("workspaceId");
@@ -785,6 +1026,12 @@ CREATE INDEX "VerificationRequest_reviewedById_idx" ON "VerificationRequest"("re
 CREATE INDEX "chamber_schedules_chamberId_idx" ON "chamber_schedules"("chamberId");
 
 -- CreateIndex
+CREATE INDEX "appointments_workspaceId_idx" ON "appointments"("workspaceId");
+
+-- CreateIndex
+CREATE INDEX "appointments_chamberId_idx" ON "appointments"("chamberId");
+
+-- CreateIndex
 CREATE INDEX "appointments_doctorId_idx" ON "appointments"("doctorId");
 
 -- CreateIndex
@@ -794,13 +1041,22 @@ CREATE INDEX "appointments_patientId_idx" ON "appointments"("patientId");
 CREATE INDEX "appointments_appointmentDate_idx" ON "appointments"("appointmentDate");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "appointments_chamberId_doctorId_appointmentDate_serialNo_key" ON "appointments"("chamberId", "doctorId", "appointmentDate", "serialNo");
+CREATE INDEX "appointments_paymentStatus_idx" ON "appointments"("paymentStatus");
+
+-- CreateIndex
+CREATE INDEX "appointments_followUpOfId_idx" ON "appointments"("followUpOfId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "appointments_chamberId_appointmentDate_serialNo_key" ON "appointments"("chamberId", "appointmentDate", "serialNo");
 
 -- CreateIndex
 CREATE INDEX "prescription_medicines_prescriptionId_idx" ON "prescription_medicines"("prescriptionId");
 
 -- CreateIndex
 CREATE INDEX "prescription_medicines_medicineId_idx" ON "prescription_medicines"("medicineId");
+
+-- CreateIndex
+CREATE INDEX "prescription_investigations_prescriptionId_idx" ON "prescription_investigations"("prescriptionId");
 
 -- CreateIndex
 CREATE INDEX "prescription_pdf_versions_prescriptionId_idx" ON "prescription_pdf_versions"("prescriptionId");
@@ -896,19 +1152,70 @@ ALTER TABLE "Chamber" ADD CONSTRAINT "Chamber_workspaceId_fkey" FOREIGN KEY ("wo
 ALTER TABLE "patients" ADD CONSTRAINT "patients_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "patients" ADD CONSTRAINT "patients_chamberId_fkey" FOREIGN KEY ("chamberId") REFERENCES "Chamber"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "patients" ADD CONSTRAINT "patients_doctorId_fkey" FOREIGN KEY ("doctorId") REFERENCES "Doctor"("id") ON DELETE SET DEFAULT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Prescription" ADD CONSTRAINT "Prescription_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Prescription" ADD CONSTRAINT "Prescription_chamberId_fkey" FOREIGN KEY ("chamberId") REFERENCES "Chamber"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Prescription" ADD CONSTRAINT "Prescription_chamberId_fkey" FOREIGN KEY ("chamberId") REFERENCES "Chamber"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Prescription" ADD CONSTRAINT "Prescription_doctorUserId_fkey" FOREIGN KEY ("doctorUserId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Prescription" ADD CONSTRAINT "Prescription_patientId_fkey" FOREIGN KEY ("patientId") REFERENCES "patients"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Prescription" ADD CONSTRAINT "Prescription_supersedesId_fkey" FOREIGN KEY ("supersedesId") REFERENCES "Prescription"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Prescription" ADD CONSTRAINT "Prescription_appointmentId_fkey" FOREIGN KEY ("appointmentId") REFERENCES "appointments"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "financial_categories" ADD CONSTRAINT "financial_categories_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "financial_transactions" ADD CONSTRAINT "financial_transactions_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "financial_transactions" ADD CONSTRAINT "financial_transactions_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "financial_transactions" ADD CONSTRAINT "financial_transactions_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "financial_categories"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "financial_transactions" ADD CONSTRAINT "financial_transactions_patientId_fkey" FOREIGN KEY ("patientId") REFERENCES "patients"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "financial_transactions" ADD CONSTRAINT "financial_transactions_appointmentId_fkey" FOREIGN KEY ("appointmentId") REFERENCES "appointments"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "financial_transactions" ADD CONSTRAINT "financial_transactions_prescriptionId_fkey" FOREIGN KEY ("prescriptionId") REFERENCES "Prescription"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "doctor_visiting_fees" ADD CONSTRAINT "doctor_visiting_fees_doctorId_fkey" FOREIGN KEY ("doctorId") REFERENCES "Doctor"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "doctor_visiting_fees" ADD CONSTRAINT "doctor_visiting_fees_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "doctor_visiting_fees" ADD CONSTRAINT "doctor_visiting_fees_chamberId_fkey" FOREIGN KEY ("chamberId") REFERENCES "Chamber"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "revenue_share_configs" ADD CONSTRAINT "revenue_share_configs_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "revenue_share_configs" ADD CONSTRAINT "revenue_share_configs_doctorId_fkey" FOREIGN KEY ("doctorId") REFERENCES "Doctor"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "prescription_templates" ADD CONSTRAINT "prescription_templates_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "prescription_templates" ADD CONSTRAINT "prescription_templates_doctorUserId_fkey" FOREIGN KEY ("doctorUserId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "clinical_observations" ADD CONSTRAINT "clinical_observations_prescriptionId_fkey" FOREIGN KEY ("prescriptionId") REFERENCES "Prescription"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -959,7 +1266,10 @@ ALTER TABLE "VerificationRequest" ADD CONSTRAINT "VerificationRequest_reviewedBy
 ALTER TABLE "chamber_schedules" ADD CONSTRAINT "chamber_schedules_chamberId_fkey" FOREIGN KEY ("chamberId") REFERENCES "Chamber"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "appointments" ADD CONSTRAINT "appointments_chamberId_fkey" FOREIGN KEY ("chamberId") REFERENCES "Chamber"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "appointments" ADD CONSTRAINT "appointments_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "appointments" ADD CONSTRAINT "appointments_chamberId_fkey" FOREIGN KEY ("chamberId") REFERENCES "Chamber"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "appointments" ADD CONSTRAINT "appointments_doctorId_fkey" FOREIGN KEY ("doctorId") REFERENCES "Doctor"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -968,10 +1278,16 @@ ALTER TABLE "appointments" ADD CONSTRAINT "appointments_doctorId_fkey" FOREIGN K
 ALTER TABLE "appointments" ADD CONSTRAINT "appointments_patientId_fkey" FOREIGN KEY ("patientId") REFERENCES "patients"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "appointments" ADD CONSTRAINT "appointments_followUpOfId_fkey" FOREIGN KEY ("followUpOfId") REFERENCES "appointments"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "prescription_medicines" ADD CONSTRAINT "prescription_medicines_prescriptionId_fkey" FOREIGN KEY ("prescriptionId") REFERENCES "Prescription"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "prescription_medicines" ADD CONSTRAINT "prescription_medicines_medicineId_fkey" FOREIGN KEY ("medicineId") REFERENCES "medicines"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "prescription_investigations" ADD CONSTRAINT "prescription_investigations_prescriptionId_fkey" FOREIGN KEY ("prescriptionId") REFERENCES "Prescription"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "prescription_pdf_versions" ADD CONSTRAINT "prescription_pdf_versions_prescriptionId_fkey" FOREIGN KEY ("prescriptionId") REFERENCES "Prescription"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -20,32 +20,31 @@ async function main() {
 
     const { default: app } = await import("./app");
 
-    server = app.listen(config.port, async () => {
-      console.log(`🌐 Server is running on port ${config.port}`);
-
-      if (config.env !== "production") {
-        try {
-          const { seed } = await import("../prisma/seed");
-          await seed();
-        } catch (seedError: any) {
-          console.warn("⚠️ Seed warning:", seedError.message);
-        }
-      } else {
-        console.log("🚫 Skipping seed in production");
-      }
-
-      
+    if (config.env !== "production") {
       try {
-        const { SubscriptionServices } = await import(
-          "./modules/subscription/subscription.service"
-        );
-        const result = await SubscriptionServices.runExpiryChecks();
-        if (result.created > 0) {
-          console.log(`Subscription expiry warnings created: ${result.created}`);
-        }
-      } catch (expiryError: any) {
-        console.warn("Subscription expiry check warning:", expiryError.message);
+        const { seed } = await import("../prisma/seed");
+        await seed();
+      } catch (seedError: any) {
+        console.warn("⚠️ Seed warning:", seedError.message);
       }
+    } else {
+      console.log("🚫 Skipping seed in production");
+    }
+
+    try {
+      const { SubscriptionServices } = await import(
+        "./modules/subscription/subscription.service"
+      );
+      const result = await SubscriptionServices.runExpiryChecks();
+      if (result.created > 0) {
+        console.log(`Subscription expiry warnings created: ${result.created}`);
+      }
+    } catch (expiryError: any) {
+      console.warn("Subscription expiry check warning:", expiryError.message);
+    }
+
+    server = app.listen(config.port, () => {
+      console.log(`🌐 Server is running on port ${config.port}`);
     });
 
     server.on("error", (err) => {

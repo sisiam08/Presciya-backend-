@@ -110,7 +110,7 @@ const generateTokens = (user: {
   return { accessToken, refreshToken };
 };
 
-const sendOTP = async (name: string, email: string) => {
+const sendOTP = async (name: string, email: string, requestId?: string) => {
   const existingUser = await prisma.user.findUnique({
     where: { email },
     select: { id: true },
@@ -146,9 +146,8 @@ const sendOTP = async (name: string, email: string) => {
   }
 
   try {
-    await emailService.sendOTPEmail(email, name, otp);
+    await emailService.sendOTPEmail(email, name, otp, requestId);
   } catch (error) {
-    console.error("Failed to send OTP email:", error);
     await prisma.oTP
       .deleteMany({
         where: { email },

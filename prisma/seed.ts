@@ -28,21 +28,9 @@ const FEATURES: {
   { key: "max_chambers", description: "Maximum number of chambers", category: "workspaces" },
   { key: "finance", description: "Internal business finance", category: "finance" },
   { key: "visiting_fees", description: "Configure visiting / follow-up fees", category: "finance" },
-  
-  
-  
-  
-  
-  
-  
-  
-  
   { key: "prescription_language", description: "Change the prescription language", category: "prescriptions" },
   { key: "prescription_design_templates", description: "Choose between the built-in prescription designs", category: "prescriptions" },
   { key: "prescription_templates", description: "Save and reuse your own prescription templates", category: "prescriptions" },
-  
-  
-  
   { key: "institution", description: "Institution, hospital and clinic workspaces", category: "workspaces", enabledByDefault: false },
 ];
 
@@ -353,17 +341,34 @@ async function seedPlans() {
 export async function seed() {
   console.log("Starting seed...");
 
+  // ── Admin credentials ────────────────────────────────────────────────────────
+  const adminEmail = process.env.SEED_ADMIN_EMAIL;
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+
+  if (!adminEmail || !adminEmail.includes("@")) {
+    throw new Error(
+      "SEED_ADMIN_EMAIL is required and must be a valid email address. " +
+      "Set it in your .env file before running the seed script.",
+    );
+  }
+  if (!adminPassword || adminPassword.length < 12) {
+    throw new Error(
+      "SEED_ADMIN_PASSWORD is required and must be at least 12 characters long. " +
+      "Set it in your .env file before running the seed script.",
+    );
+  }
+
   const hashedPassword = await bcrypt.hash(
-    "@SuperAdmin@123!",
+    adminPassword,
     config.bcrypt.bcryptSaltRound,
   );
 
   const admin = await prisma.user.upsert({
-    where: { email: "superadmin@admin.com" },
+    where: { email: adminEmail },
     update: { isVerified: true, emailVerifiedAt: new Date() },
     create: {
       name: "Super Admin",
-      email: "superadmin@admin.com",
+      email: adminEmail,
       password: hashedPassword,
       systemRole: SystemRole.SUPER_ADMIN,
       isVerified: true,
@@ -371,7 +376,7 @@ export async function seed() {
     },
   });
 
-  console.log("Created super admin:", admin.email);
+  console.log("Super admin account seeded.");
 
   await seedFeatures();
   await seedPermissions();
@@ -380,6 +385,7 @@ export async function seed() {
 
   console.log("Seed completed successfully!");
 }
+
 
 
 

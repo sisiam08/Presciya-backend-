@@ -94,3 +94,27 @@ export const uploadImage = multer({
 });
 
 export { memoryStorage as storage, cloudinaryStorage };
+
+// ── CSV upload (memory, 10 MB) ───────────────────────────────────────────────
+const CSV_MIME_TYPES = [
+  "text/csv",
+  "application/csv",
+  "text/plain",
+  "application/vnd.ms-excel",
+  "application/octet-stream",
+];
+const CSV_SIZE_LIMIT = 10 * 1024 * 1024; // 10 MB
+
+export const uploadCsv = multer({
+  storage: memoryStorage,
+  limits: { fileSize: CSV_SIZE_LIMIT, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    const allowed =
+      CSV_MIME_TYPES.includes(file.mimetype) ||
+      file.originalname.toLowerCase().endsWith(".csv");
+    if (!allowed) {
+      return cb(new Error("Only CSV files are allowed."));
+    }
+    cb(null, true);
+  },
+});

@@ -3,6 +3,9 @@ import { adminService } from "./admin.service";
 import { authRole } from "../../middleware/auth";
 import { requirePermission } from "../../middleware/permission";
 import { SystemRole } from "../../../generated/prisma/enums";
+import { uploadCsv } from "../../config/multer.config";
+import sendResponse from "../../utils/sendResponse";
+import { Status } from "../../errors/httpStatus";
 
 const router = Router();
 
@@ -263,6 +266,76 @@ router.post(
     try {
       const result = await adminService.createMedicine(req.body);
       res.status(201).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── CSV Import ──────────────────────────────────────────────────────────────
+router.post(
+  "/medicines/import",
+  uploadCsv.single("file"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!req.file) {
+        return res.status(Status.BAD_REQUEST).json({
+          success: false,
+          message: "No file uploaded. Please attach a CSV file with field name \"file\".",
+        });
+      }
+      // Enforce CSV extension on the backend regardless of MIME
+      if (!req.file.originalname.toLowerCase().endsWith(".csv")) {
+        return res.status(Status.BAD_REQUEST).json({
+          success: false,
+          message: "Uploaded file must have a .csv extension.",
+        });
+      }
+
+      const onDuplicate =
+        (req.query.on_duplicate as string) === "update" ? "update" : "skip";
+
+      const result = await adminService.importMedicinesFromCsv(
+        req.file.buffer,
+        onDuplicate,
+      );
+
+      sendResponse(res, {
+        statusCode: Status.OK,
+        success: true,
+        message: result.message,
+        data: result,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── Delete medicine ─────────────────────────────────────────────────────────
+router.delete(
+  "/medicines/:id",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params as { id: string };
+      // Safety: refuse to delete if referenced by any prescription medicine
+      const refCount = await (await import("../../lib/prisma")).prisma.prescriptionMedicine.count({
+        where: { medicineId: id },
+      });
+      if (refCount > 0) {
+        return res.status(Status.CONFLICT).json({
+          success: false,
+          message: `Cannot delete: this medicine is referenced by ${refCount} prescription(s). Consider keeping it for historical integrity.`,
+          data: { referenceCount: refCount },
+        });
+      }
+      await (await import("../../lib/prisma")).prisma.medicine.delete({ where: { id } });
+      sendResponse(res, {
+        statusCode: Status.OK,
+        success: true,
+        message: "Medicine deleted successfully.",
+        data: { id },
+      });
     } catch (err) {
       next(err);
     }

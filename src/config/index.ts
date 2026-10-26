@@ -105,10 +105,10 @@ const envSchema = z.object({
   CLOUDEINARY_CLOUD_NAME: z.string().optional(),
   CLOUDEINARY_API_KEY: z.string().optional(),
   CLOUDEINARY_API_SECRET: z.string().optional(),
-  NODEMAILER_HOST: z.string().optional(),
-  NODEMAILER_PORT: z.coerce.number().int().positive().default(465),
-  APP_USER: z.string().optional(),
-  APP_PASSWORD: z.string().optional(),
+
+  RESEND_API_KEY: z.string().optional(),
+  MAIL_FROM_EMAIL: z.string().email("MAIL_FROM_EMAIL must be a valid email").optional(),
+  MAIL_FROM_NAME: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -130,9 +130,11 @@ if (isProduction) {
   const missing: string[] = [];
   if (!env.ACCESS_TOKEN_SECRET && !env.JWT_SECRET) missing.push("ACCESS_TOKEN_SECRET");
   if (!env.REFRESH_TOKEN_SECRET) missing.push("REFRESH_TOKEN_SECRET");
+  if (!env.RESEND_API_KEY) missing.push("RESEND_API_KEY");
+  if (!env.MAIL_FROM_EMAIL) missing.push("MAIL_FROM_EMAIL");
   if (missing.length > 0) {
     throw new Error(
-      `Missing required production secret(s): ${missing.join(", ")}. Refusing to start with an insecure fallback.`,
+      `Missing required production secret(s): ${missing.join(", ")}. Refusing to start.`,
     );
   }
 }
@@ -242,13 +244,10 @@ const config = {
     cloudinaryApiKey: env.CLOUDEINARY_API_KEY,
     cloudinaryApiSecret: env.CLOUDEINARY_API_SECRET,
   },
-  nodemailer: {
-    host: env.NODEMAILER_HOST,
-    port: env.NODEMAILER_PORT,
-    auth: {
-      user: env.APP_USER,
-      pass: env.APP_PASSWORD,
-    },
+  resend: {
+    apiKey: env.RESEND_API_KEY ?? "",
+    fromEmail: env.MAIL_FROM_EMAIL ?? "",
+    fromName: env.MAIL_FROM_NAME ?? "Presciya",
   },
   invitationExpiryDays: env.INVITATION_EXPIRY_DAYS,
 };

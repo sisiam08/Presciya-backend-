@@ -45,7 +45,7 @@ const clearCookies = (res: Response) => {
 
 const sendOTP = catchAsync(async (req: Request, res: Response) => {
   const { name, email } = req.body;
-  const result = await AuthServices.sendOTP(name, email);
+  const result = await AuthServices.sendOTP(name, email, req.id);
 
   sendResponse(res, {
     statusCode: Status.CREATED,

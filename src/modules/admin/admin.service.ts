@@ -8,6 +8,7 @@ import {
 import { getPaginationParams, buildPaginatedResult } from "../../utils/pagination";
 import { createAppError } from "../../errors/appError";
 import { Status } from "../../errors/httpStatus";
+import { parse as parseCsv } from "csv-parse/sync";
 
 export const adminService = {  
   async listUsers() {
@@ -475,5 +476,216 @@ export const adminService = {
         manufacturer: data.manufacturer || null,
       },
     });
+  },
+  // ── CSV Import ─────────────────────────────────────────────────────────────
+  async importMedicinesFromCsv(
+    fileBuffer: Buffer,
+    onDuplicate: "skip" | "update" = "skip",
+  ) {
+    // ── 1. Parse CSV ──────────────────────────────────────────────────────────
+    let rawRows: Record<string, string>[];
+    try {
+      rawRows = parseCsv(fileBuffer, {
+        columns: true,         // use first row as header
+        skip_empty_lines: true,
+        trim: true,
+        relax_column_count: true,
+        bom: true,             // strip BOM if present
+      }) as Record<string, string>[];
+    } catch (err: any) {
+      throw createAppError(
+        `CSV parsing failed: ${err.message}`,
+        Status.BAD_REQUEST,
+      );
+    }
+
+    if (!rawRows || rawRows.length === 0) {
+      throw createAppError("The CSV file is empty or has no data rows.", Status.BAD_REQUEST);
+    }
+
+    // ── 2. Normalise header names (lowercase, strip spaces/underscores) ────────
+    const normaliseKey = (k: string) =>
+      k.toLowerCase().replace(/[\s_-]+/g, "");
+
+    const normalisedRows = rawRows.map((row) => {
+      const out: Record<string, string> = {};
+      for (const [k, v] of Object.entries(row)) {
+        out[normaliseKey(k)] = (v ?? "").trim();
+      }
+      return out;
+    });
+
+    // Expected normalised keys
+    const COL_BRAND    = "brandname";
+    const COL_SLUG     = "slug";
+    const COL_DOSAGE   = "dosageform";
+    const COL_GENERIC  = "generic";
+    const COL_STRENGTH = "strength";
+    const COL_MFR      = "manufacturer";
+
+    // ── 3. Validate headers ───────────────────────────────────────────────────
+    const requiredCols = [COL_BRAND, COL_SLUG, COL_DOSAGE, COL_GENERIC];
+    const firstRow = normalisedRows[0]!; // safe: we checked rawRows.length > 0 above
+    const missingCols = requiredCols.filter((c) => !(c in firstRow));
+    if (missingCols.length > 0) {
+      // Build human-readable names for the error message
+      const colMap: Record<string, string> = {
+        brandname:  "brand name",
+        slug:       "slug",
+        dosageform: "dosage form",
+        generic:    "generic",
+      };
+      throw createAppError(
+        `CSV is missing required column(s): ${missingCols.map((c) => colMap[c] ?? c).join(", ")}`,
+        Status.BAD_REQUEST,
+      );
+    }
+
+    // ── 4. Row-level validation ───────────────────────────────────────────────
+    const validRows: {
+      brandName: string;
+      slug: string;
+      dosageForm: string;
+      generic: string;
+      strength: string | null;
+      manufacturer: string | null;
+    }[] = [];
+    const rowErrors: { row: number; error: string }[] = [];
+
+    for (let i = 0; i < normalisedRows.length; i++) {
+      const row = normalisedRows[i] as Record<string, string>; // safe: iterating within bounds
+      const rowNum = i + 2; // 1-indexed, +1 for header row
+
+      const brandName  = (row[COL_BRAND] ?? "").trim();
+      const slug       = (row[COL_SLUG] ?? "").trim();
+      const dosageForm = (row[COL_DOSAGE] ?? "").trim();
+      const generic    = (row[COL_GENERIC] ?? "").trim();
+      const strength   = (row[COL_STRENGTH] ?? "").trim() || null;
+      const manufacturer = (row[COL_MFR] ?? "").trim() || null;
+
+      const fieldErrors: string[] = [];
+      if (!brandName) fieldErrors.push("brand name is required");
+      if (!slug)      fieldErrors.push("slug is required");
+      if (!dosageForm) fieldErrors.push("dosage form is required");
+      if (!generic)   fieldErrors.push("generic is required");
+
+      // Validate slug format: only lowercase letters, digits, hyphens
+      if (slug && !/^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/.test(slug)) {
+        fieldErrors.push(
+          "slug must contain only lowercase letters, digits, and hyphens (e.g. napa-500mg)",
+        );
+      }
+
+      if (fieldErrors.length > 0) {
+        rowErrors.push({ row: rowNum, error: fieldErrors.join("; ") });
+        continue;
+      }
+
+      validRows.push({ brandName, slug, dosageForm, generic, strength, manufacturer });
+    }
+
+    if (validRows.length === 0) {
+      return {
+        total: rawRows.length,
+        inserted: 0,
+        updated: 0,
+        skipped: 0,
+        errors: rowErrors,
+        message: "No valid rows found; all rows had validation errors.",
+      };
+    }
+
+    // ── 5. Slug uniqueness check (batch) ──────────────────────────────────────
+    const slugs = [...new Set(validRows.map((r) => r.slug))];
+    const existing = await prisma.medicine.findMany({
+      where: { slug: { in: slugs } },
+      select: { id: true, slug: true },
+    });
+    const existingSlugMap = new Map(existing.map((m) => [m.slug, m.id]));
+
+    // ── 6. Detect intra-CSV duplicate slugs ───────────────────────────────────
+    const seenSlugs = new Map<string, number>(); // slug → first rowIndex in validRows
+    const deduped: typeof validRows = [];
+    for (let i = 0; i < validRows.length; i++) {
+      const r = validRows[i]!; // safe: iterating within bounds of typed array
+      if (seenSlugs.has(r.slug)) {
+        // Treat as duplicate of first occurrence within the file
+        rowErrors.push({
+          row: i + 2, // approximate; exact row unknown after filtering
+          error: `duplicate slug "${r.slug}" within the CSV (first seen earlier); row skipped`,
+        });
+      } else {
+        seenSlugs.set(r.slug, i);
+        deduped.push(r);
+      }
+    }
+
+    // ── 7. Categorise rows ────────────────────────────────────────────────────
+    const toInsert = deduped.filter((r) => !existingSlugMap.has(r.slug));
+    const toUpdate = deduped.filter((r) => existingSlugMap.has(r.slug));
+
+    // ── 8. Execute inserts in one bulk query and updates transactionally ───────
+    let inserted = 0;
+    let updated  = 0;
+    let skipped  = 0;
+
+    // Insert new medicines
+    if (toInsert.length > 0) {
+      const result = await prisma.medicine.createMany({
+        data: toInsert.map((r) => ({
+          brandName:    r.brandName,
+          slug:         r.slug,
+          dosageForm:   r.dosageForm,
+          type:         r.dosageForm,
+          generic:      r.generic,
+          strength:     r.strength,
+          manufacturer: r.manufacturer,
+        })),
+      });
+      inserted = result.count;
+    }
+
+    // Handle duplicates
+    if (toUpdate.length > 0) {
+      if (onDuplicate === "update") {
+        await prisma.$transaction(
+          async (tx) => {
+            await Promise.all(
+              toUpdate.map((r) => {
+                const id = existingSlugMap.get(r.slug)!;
+                return tx.medicine.update({
+                  where: { id },
+                  data: {
+                    brandName:    r.brandName,
+                    dosageForm:   r.dosageForm,
+                    type:         r.dosageForm,
+                    generic:      r.generic,
+                    strength:     r.strength || null,
+                    manufacturer: r.manufacturer || null,
+                  },
+                });
+              }),
+            );
+          },
+          {
+            maxWait: 10_000,
+            timeout: 60_000,
+          },
+        );
+        updated = toUpdate.length;
+      } else {
+        // skip
+        skipped = toUpdate.length;
+      }
+    }
+
+    return {
+      total:    rawRows.length,
+      inserted,
+      updated,
+      skipped,
+      errors:   rowErrors,
+      message:  `Import complete. ${inserted} inserted, ${updated} updated, ${skipped} skipped, ${rowErrors.length} error(s).`,
+    };
   },
 };

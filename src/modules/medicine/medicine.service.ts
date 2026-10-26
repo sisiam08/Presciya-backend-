@@ -70,8 +70,7 @@ const searchMedicines = async (
   const cleanQuery = query.trim();
 
   try {
-    
-    
+    // Primary: trigram similarity on brandName + ILIKE on all four searchable fields
     const sql = `
       SELECT id, "brandName", type, slug, "dosageForm", generic, strength, manufacturer,
              similarity("brandName", $1) AS score
@@ -79,6 +78,8 @@ const searchMedicines = async (
       WHERE "brandName" % $1 
          OR "brandName" ILIKE $2
          OR generic ILIKE $2
+         OR strength ILIKE $2
+         OR manufacturer ILIKE $2
       ORDER BY score DESC, "brandName" ASC
       LIMIT $3 OFFSET $4
     `;
@@ -131,6 +132,8 @@ const searchMedicines = async (
         OR: [
           { brandName: { contains: cleanQuery, mode: "insensitive" } },
           { generic: { contains: cleanQuery, mode: "insensitive" } },
+          { strength: { contains: cleanQuery, mode: "insensitive" } },
+          { manufacturer: { contains: cleanQuery, mode: "insensitive" } },
         ],
       },
       orderBy: { brandName: "asc" },
